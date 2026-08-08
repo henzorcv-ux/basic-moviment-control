@@ -1,7 +1,7 @@
 --[[
     Speed Control Pro v2.8 + Infinite Jump + Noclip
     Design Premium - Botão Pulo com OFF/ON + Botão Noclip
-    + Painel reduzido com botões uniformes
+    + Botão Noclip em Y=210 (extremamente próximo)
 --]]
 
 -- ============================================
@@ -359,7 +359,7 @@ function NoclipModule:setupNoclip()
 end
 
 -- ============================================
--- DESIGN PREMIUM - PAINEL REDUZIDO COM BOTÕES UNIFORMES
+-- DESIGN PREMIUM - BOTÃO NOCLIP EM Y=210
 -- ============================================
 
 local function createUI(speedModule, jumpModule, noclipModule)
@@ -391,7 +391,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== JANELA PRINCIPAL (REDUZIDA) =====
+    -- ===== JANELA PRINCIPAL =====
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 260, 0, 380)
     mainFrame.Position = UDim2.new(0.5, -130, 0.5, -190)
@@ -406,7 +406,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = mainFrame
 
-    -- Sombra (reduzida)
+    -- Sombra
     local shadow = Instance.new("Frame")
     shadow.Size = UDim2.new(1, 16, 1, 16)
     shadow.Position = UDim2.new(0, -8, 0, -8)
@@ -420,7 +420,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     shadowCorner.CornerRadius = UDim.new(0, 16)
     shadowCorner.Parent = shadow
 
-    -- ===== CABEÇALHO (REDUZIDO) =====
+    -- ===== CABEÇALHO =====
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 48)
     header.BackgroundColor3 = theme.surface
@@ -441,7 +441,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     gradient.Rotation = 45
     gradient.Parent = header
 
-    -- Ícone e Título (reduzidos)
+    -- Ícone e Título
     local titleIcon = Instance.new("TextLabel")
     titleIcon.Size = UDim2.new(0, 24, 0, 24)
     titleIcon.Position = UDim2.new(0, 10, 0.5, -12)
@@ -478,7 +478,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     subtitle.TextYAlignment = Enum.TextYAlignment.Bottom
     subtitle.Parent = header
 
-    -- Botões do cabeçalho (reduzidos)
+    -- Botões do cabeçalho
     local headerButtons = Instance.new("Frame")
     headerButtons.Size = UDim2.new(0, 56, 1, 0)
     headerButtons.Position = UDim2.new(1, -60, 0, 0)
@@ -517,20 +517,20 @@ local function createUI(speedModule, jumpModule, noclipModule)
     closeCorner.CornerRadius = UDim.new(0, 5)
     closeCorner.Parent = closeBtn
 
-    -- ===== CONTEÚDO (REDUZIDO) =====
+    -- ===== CONTEÚDO =====
     local content = Instance.new("Frame")
     content.Size = UDim2.new(1, -24, 1, -64)
     content.Position = UDim2.new(0, 12, 0, 56)
     content.BackgroundTransparency = 1
     content.Parent = mainFrame
 
-    -- ===== SEÇÃO VELOCIDADE (REDUZIDA) =====
+    -- ===== SEÇÃO VELOCIDADE =====
     local speedSection = Instance.new("Frame")
     speedSection.Size = UDim2.new(1, 0, 0, 135)
     speedSection.BackgroundTransparency = 1
     speedSection.Parent = content
 
-    -- Título da seção (reduzido)
+    -- Título da seção
     local speedTitleContainer = Instance.new("Frame")
     speedTitleContainer.Size = UDim2.new(1, 0, 0, 20)
     speedTitleContainer.BackgroundTransparency = 1
@@ -559,7 +559,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     speedTitle.TextYAlignment = Enum.TextYAlignment.Center
     speedTitle.Parent = speedTitleContainer
 
-    -- Display de velocidade (reduzido)
+    -- Display de velocidade
     local speedDisplay = Instance.new("Frame")
     speedDisplay.Size = UDim2.new(0, 96, 0, 50)
     speedDisplay.Position = UDim2.new(0.5, -48, 0, 24)
@@ -597,7 +597,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     speedUnit.TextYAlignment = Enum.TextYAlignment.Top
     speedUnit.Parent = speedDisplay
 
-    -- Slider (reduzido)
+    -- Slider
     local sliderContainer = Instance.new("Frame")
     sliderContainer.Size = UDim2.new(1, -16, 0, 24)
     sliderContainer.Position = UDim2.new(0, 8, 0, 80)
@@ -663,28 +663,28 @@ local function createUI(speedModule, jumpModule, noclipModule)
     buttonCorner.CornerRadius = UDim.new(1, 0)
     buttonCorner.Parent = sliderButton
 
-    -- ===== BOTÃO DE VELOCIDADE (AGORA DO MESMO TAMANHO DOS OUTROS) =====
+    -- Botão de velocidade (TAMANHO 96x32)
     local speedToggleContainer = Instance.new("Frame")
-    speedToggleContainer.Size = UDim2.new(1, 0, 0, 40) -- ANTES: 30
+    speedToggleContainer.Size = UDim2.new(1, 0, 0, 40)
     speedToggleContainer.Position = UDim2.new(0, 0, 0, 106)
     speedToggleContainer.BackgroundTransparency = 1
     speedToggleContainer.Parent = speedSection
 
     local speedToggleBtn = Instance.new("TextButton")
-    speedToggleBtn.Size = UDim2.new(0, 96, 0, 32) -- MESMO TAMANHO DOS OUTROS BOTÕES
+    speedToggleBtn.Size = UDim2.new(0, 96, 0, 32)
     speedToggleBtn.Position = UDim2.new(0.5, -48, 0.5, -16)
     speedToggleBtn.BackgroundColor3 = theme.danger
     speedToggleBtn.BackgroundTransparency = 0.15
     speedToggleBtn.Text = "OFF"
     speedToggleBtn.TextColor3 = theme.danger
-    speedToggleBtn.TextSize = 14 -- MESMO TAMANHO DOS OUTROS
+    speedToggleBtn.TextSize = 14
     speedToggleBtn.Font = Enum.Font.GothamBold
-    speedToggleBtn.BorderSizePixel = 2 -- MESMA BORDA DOS OUTROS
+    speedToggleBtn.BorderSizePixel = 2
     speedToggleBtn.BorderColor3 = theme.danger
     speedToggleBtn.Parent = speedToggleContainer
 
     local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 8) -- MESMO ARREDONDAMENTO
+    toggleCorner.CornerRadius = UDim.new(0, 8)
     toggleCorner.Parent = speedToggleBtn
 
     -- ===== DIVISOR 1 =====
@@ -696,46 +696,46 @@ local function createUI(speedModule, jumpModule, noclipModule)
     divider1.BorderSizePixel = 0
     divider1.Parent = content
 
-    -- ===== SEÇÃO PULO (REDUZIDA) =====
+    -- ===== SEÇÃO PULO (COM BOTÃO 96x32) =====
     local jumpSection = Instance.new("Frame")
-    jumpSection.Size = UDim2.new(1, 0, 0, 110)
+    jumpSection.Size = UDim2.new(1, 0, 0, 100)
     jumpSection.Position = UDim2.new(0, 0, 0, 143)
     jumpSection.BackgroundTransparency = 1
     jumpSection.Parent = content
 
-    -- Título da seção (reduzido)
+    -- Título da seção
     local jumpTitleContainer = Instance.new("Frame")
-    jumpTitleContainer.Size = UDim2.new(1, 0, 0, 20)
+    jumpTitleContainer.Size = UDim2.new(1, 0, 0, 18)
     jumpTitleContainer.BackgroundTransparency = 1
     jumpTitleContainer.Parent = jumpSection
 
     local jumpTitleIcon = Instance.new("TextLabel")
-    jumpTitleIcon.Size = UDim2.new(0, 16, 1, 0)
+    jumpTitleIcon.Size = UDim2.new(0, 14, 1, 0)
     jumpTitleIcon.BackgroundTransparency = 1
     jumpTitleIcon.Text = "🚀"
     jumpTitleIcon.TextColor3 = theme.jumpColor
-    jumpTitleIcon.TextSize = 12
+    jumpTitleIcon.TextSize = 11
     jumpTitleIcon.Font = Enum.Font.GothamBold
     jumpTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
     jumpTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
     jumpTitleIcon.Parent = jumpTitleContainer
 
     local jumpTitle = Instance.new("TextLabel")
-    jumpTitle.Size = UDim2.new(1, -20, 1, 0)
-    jumpTitle.Position = UDim2.new(0, 20, 0, 0)
+    jumpTitle.Size = UDim2.new(1, -18, 1, 0)
+    jumpTitle.Position = UDim2.new(0, 18, 0, 0)
     jumpTitle.BackgroundTransparency = 1
     jumpTitle.Text = "PULO INFINITO"
     jumpTitle.TextColor3 = theme.textSecondary
-    jumpTitle.TextSize = 9
+    jumpTitle.TextSize = 8
     jumpTitle.Font = Enum.Font.GothamBold
     jumpTitle.TextXAlignment = Enum.TextXAlignment.Left
     jumpTitle.TextYAlignment = Enum.TextYAlignment.Center
     jumpTitle.Parent = jumpTitleContainer
 
-    -- Botão de pulo
+    -- Botão de pulo (96x32)
     local jumpToggleContainer = Instance.new("Frame")
-    jumpToggleContainer.Size = UDim2.new(1, 0, 0, 40)
-    jumpToggleContainer.Position = UDim2.new(0, 0, 0, 22)
+    jumpToggleContainer.Size = UDim2.new(1, 0, 0, 38)
+    jumpToggleContainer.Position = UDim2.new(0, 0, 0, 20)
     jumpToggleContainer.BackgroundTransparency = 1
     jumpToggleContainer.Parent = jumpSection
 
@@ -758,71 +758,64 @@ local function createUI(speedModule, jumpModule, noclipModule)
 
     -- Label de status (reduzido)
     local jumpStatusContainer = Instance.new("Frame")
-    jumpStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 68)
+    jumpStatusContainer.Size = UDim2.new(1, 0, 0, 14)
+    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 62)
     jumpStatusContainer.BackgroundTransparency = 1
     jumpStatusContainer.Parent = jumpSection
 
     local jumpStatusLabel = Instance.new("TextLabel")
     jumpStatusLabel.Size = UDim2.new(1, 0, 1, 0)
     jumpStatusLabel.BackgroundTransparency = 1
-    jumpStatusLabel.Text = "Espaço para pular no ar"
+    jumpStatusLabel.Text = "Espaço para pular"
     jumpStatusLabel.TextColor3 = theme.textMuted
-    jumpStatusLabel.TextSize = 8
+    jumpStatusLabel.TextSize = 7
     jumpStatusLabel.Font = Enum.Font.Gotham
     jumpStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
     jumpStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
     jumpStatusLabel.Parent = jumpStatusContainer
 
-    -- ===== DIVISOR 2 =====
-    local divider2 = Instance.new("Frame")
-    divider2.Size = UDim2.new(1, 0, 0, 1)
-    divider2.Position = UDim2.new(0, 0, 0, 256)
-    divider2.BackgroundColor3 = theme.border
-    divider2.BackgroundTransparency = 0.5
-    divider2.BorderSizePixel = 0
-    divider2.Parent = content
+    -- ===== DIVISOR 2 (REMOVIDO) =====
 
-    -- ===== SEÇÃO NOCLIP (REDUZIDA) =====
+    -- ===== SEÇÃO NOCLIP (DEFINIDA EM Y=210) =====
     local noclipSection = Instance.new("Frame")
-    noclipSection.Size = UDim2.new(1, 0, 0, 95)
-    noclipSection.Position = UDim2.new(0, 0, 0, 262)
+    noclipSection.Size = UDim2.new(1, 0, 0, 85)
+    noclipSection.Position = UDim2.new(0, 0, 0, 210) -- DEFINIDO EXATAMENTE EM Y=210
     noclipSection.BackgroundTransparency = 1
     noclipSection.Parent = content
 
-    -- Título da seção (reduzido)
+    -- Título da seção
     local noclipTitleContainer = Instance.new("Frame")
-    noclipTitleContainer.Size = UDim2.new(1, 0, 0, 20)
+    noclipTitleContainer.Size = UDim2.new(1, 0, 0, 18)
     noclipTitleContainer.BackgroundTransparency = 1
     noclipTitleContainer.Parent = noclipSection
 
     local noclipTitleIcon = Instance.new("TextLabel")
-    noclipTitleIcon.Size = UDim2.new(0, 16, 1, 0)
+    noclipTitleIcon.Size = UDim2.new(0, 14, 1, 0)
     noclipTitleIcon.BackgroundTransparency = 1
     noclipTitleIcon.Text = "👻"
     noclipTitleIcon.TextColor3 = theme.noclipColor
-    noclipTitleIcon.TextSize = 12
+    noclipTitleIcon.TextSize = 11
     noclipTitleIcon.Font = Enum.Font.GothamBold
     noclipTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
     noclipTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
     noclipTitleIcon.Parent = noclipTitleContainer
 
     local noclipTitle = Instance.new("TextLabel")
-    noclipTitle.Size = UDim2.new(1, -20, 1, 0)
-    noclipTitle.Position = UDim2.new(0, 20, 0, 0)
+    noclipTitle.Size = UDim2.new(1, -18, 1, 0)
+    noclipTitle.Position = UDim2.new(0, 18, 0, 0)
     noclipTitle.BackgroundTransparency = 1
     noclipTitle.Text = "MODO NOCLIP"
     noclipTitle.TextColor3 = theme.textSecondary
-    noclipTitle.TextSize = 9
+    noclipTitle.TextSize = 8
     noclipTitle.Font = Enum.Font.GothamBold
     noclipTitle.TextXAlignment = Enum.TextXAlignment.Left
     noclipTitle.TextYAlignment = Enum.TextYAlignment.Center
     noclipTitle.Parent = noclipTitleContainer
 
-    -- Botão de noclip
+    -- Botão de noclip (96x32)
     local noclipToggleContainer = Instance.new("Frame")
-    noclipToggleContainer.Size = UDim2.new(1, 0, 0, 40)
-    noclipToggleContainer.Position = UDim2.new(0, 0, 0, 22)
+    noclipToggleContainer.Size = UDim2.new(1, 0, 0, 38)
+    noclipToggleContainer.Position = UDim2.new(0, 0, 0, 20)
     noclipToggleContainer.BackgroundTransparency = 1
     noclipToggleContainer.Parent = noclipSection
 
@@ -845,8 +838,8 @@ local function createUI(speedModule, jumpModule, noclipModule)
 
     -- Label de status (reduzido)
     local noclipStatusContainer = Instance.new("Frame")
-    noclipStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    noclipStatusContainer.Position = UDim2.new(0, 0, 0, 68)
+    noclipStatusContainer.Size = UDim2.new(1, 0, 0, 14)
+    noclipStatusContainer.Position = UDim2.new(0, 0, 0, 62)
     noclipStatusContainer.BackgroundTransparency = 1
     noclipStatusContainer.Parent = noclipSection
 
@@ -855,7 +848,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     noclipStatusLabel.BackgroundTransparency = 1
     noclipStatusLabel.Text = "Atravesse paredes"
     noclipStatusLabel.TextColor3 = theme.textMuted
-    noclipStatusLabel.TextSize = 8
+    noclipStatusLabel.TextSize = 7
     noclipStatusLabel.Font = Enum.Font.Gotham
     noclipStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
     noclipStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
@@ -940,7 +933,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     -- LÓGICA DOS TOGGLES
     -- ============================================
 
-    -- Toggle de Velocidade (agora com mesmo estilo dos outros)
+    -- Toggle de Velocidade
     speedToggleBtn.MouseButton1Click:Connect(function()
         speedIsActive = not speedIsActive
         if speedIsActive then
@@ -975,7 +968,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
             jumpToggleBtn.Text = "ON"
             jumpToggleBtn.TextColor3 = theme.success
             jumpToggleBtn.BorderColor3 = theme.success
-            jumpStatusLabel.Text = "✅ Pulo infinito ATIVADO"
+            jumpStatusLabel.Text = "✅ Pulo ativado"
             jumpStatusLabel.TextColor3 = theme.success
         else
             jumpModule:disable()
@@ -984,7 +977,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
             jumpToggleBtn.Text = "OFF"
             jumpToggleBtn.TextColor3 = theme.danger
             jumpToggleBtn.BorderColor3 = theme.danger
-            jumpStatusLabel.Text = "Espaço para pular no ar"
+            jumpStatusLabel.Text = "Espaço para pular"
             jumpStatusLabel.TextColor3 = theme.textMuted
         end
     end)
@@ -1002,7 +995,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
             noclipToggleBtn.Text = "ON"
             noclipToggleBtn.TextColor3 = theme.success
             noclipToggleBtn.BorderColor3 = theme.success
-            noclipStatusLabel.Text = "👻 Noclip ATIVADO"
+            noclipStatusLabel.Text = "👻 Noclip ativado"
             noclipStatusLabel.TextColor3 = theme.success
         else
             noclipModule:disable()
@@ -1103,8 +1096,8 @@ local function createUI(speedModule, jumpModule, noclipModule)
     updateUI(speedModule.currentSpeed)
 
     print("=" .. string.rep("=", 50))
-    print("⚡ Speed Control Pro v2.8 - Painel Reduzido")
-    print("🎨 Design Premium - Botões Uniformes")
+    print("⚡ Speed Control Pro v2.8 - Noclip em Y=210")
+    print("🎨 Design Premium - Botão Noclip extremamente próximo")
     print("=" .. string.rep("=", 50))
 
     return gui
@@ -1115,7 +1108,7 @@ end
 -- ============================================
 
 print("=" .. string.rep("=", 50))
-print("⚡ Speed Control Pro v2.8 - Painel Reduzido")
+print("⚡ Speed Control Pro v2.8 - Noclip em Y=210")
 print("📋 Carregando módulos...")
 print("=" .. string.rep("=", 50) .. "\n")
 
