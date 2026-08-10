@@ -1,5 +1,5 @@
 --[[
-    Speed Control Pro v2.8 - Voo com orientação pela câmera
+    Speed Control Pro v2.8 - Voo com orientação pela câmera (Velocidade 1=60, +20 por nível)
 --]]
 
 -- ============================================
@@ -360,7 +360,7 @@ function NoclipModule:setupNoclip()
 end
 
 -- ============================================
--- MÓDULO DE VOO (FLY) COM ORIENTAÇÃO PELA CÂMERA
+-- MÓDULO DE VOO (FLY) COM VELOCIDADE 1=60 E +20 POR NÍVEL
 -- ============================================
 
 local FlyModule = {}
@@ -379,8 +379,9 @@ function FlyModule.new(config)
     return self
 end
 
+-- ALTERAÇÃO AQUI: Slider 1 = 60, cada +1 = +20
 function FlyModule:getRealSpeed()
-    return 50 + (self.speed * 10)
+    return 40 + (self.speed * 20)
 end
 
 function FlyModule:enable()
@@ -498,7 +499,6 @@ function FlyModule:startFly()
                 self.bodyVelocity.Velocity = moveVector * self:getRealSpeed()
                 
                 -- Define a orientação do personagem para a direção da câmera
-                -- Isso faz o personagem olhar para onde a câmera está apontando
                 local lookAtPosition = camera.CFrame.Position + (camera.CFrame.LookVector * 100)
                 local targetCFrame = CFrame.new(rootPart.Position, lookAtPosition)
                 self.bodyGyro.CFrame = targetCFrame
@@ -1552,8 +1552,8 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     updateFlySliderUI(flyModule.speed)
 
     print("=" .. string.rep("=", 50))
-    print("⚡ Speed Control Pro v2.8 - Voo com orientação pela câmera")
-    print("🎨 Design Premium - Personagem olha para onde a câmera aponta")
+    print("⚡ Speed Control Pro v2.8 - Voo com escala 1=60, +20 por nível")
+    print("🎨 Design Premium - Velocidade proporcional")
     print("=" .. string.rep("=", 50))
 
     return gui
@@ -1564,8 +1564,9 @@ end
 -- ============================================
 
 print("=" .. string.rep("=", 50))
-print("⚡ Speed Control Pro v2.8 - Voo com orientação pela câmera")
+print("⚡ Speed Control Pro v2.8 - Voo com escala 1=60, +20 por nível")
 print("📋 Carregando módulos...")
+print("📊 Escala: 1=60, 2=80, 3=100 ... 10=240")
 print("=" .. string.rep("=", 50) .. "\n")
 
 local config = ConfigManager.new()
