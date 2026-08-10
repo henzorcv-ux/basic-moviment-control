@@ -1,5 +1,5 @@
 --[[
-    Speed Control Pro v2.8 - Títulos das seções em 13px
+    Speed Control Pro v2.8 - Voo com orientação pela câmera
 --]]
 
 -- ============================================
@@ -360,7 +360,7 @@ function NoclipModule:setupNoclip()
 end
 
 -- ============================================
--- MÓDULO DE VOO (FLY) COM ESCALA DE VELOCIDADE
+-- MÓDULO DE VOO (FLY) COM ORIENTAÇÃO PELA CÂMERA
 -- ============================================
 
 local FlyModule = {}
@@ -488,15 +488,19 @@ function FlyModule:startFly()
             
             local camera = workspace.CurrentCamera
             if camera then
+                -- Obtém a direção da câmera
                 local forward = camera.CFrame.LookVector
                 local right = camera.CFrame.RightVector
                 local up = camera.CFrame.UpVector
                 
+                -- Calcula o movimento baseado na orientação da câmera
                 local moveVector = (forward * -moveDirection.Z) + (right * moveDirection.X) + (up * moveDirection.Y)
                 self.bodyVelocity.Velocity = moveVector * self:getRealSpeed()
                 
-                local mousePos = mouse.Hit.Position
-                local targetCFrame = CFrame.new(rootPart.Position, mousePos)
+                -- Define a orientação do personagem para a direção da câmera
+                -- Isso faz o personagem olhar para onde a câmera está apontando
+                local lookAtPosition = camera.CFrame.Position + (camera.CFrame.LookVector * 100)
+                local targetCFrame = CFrame.new(rootPart.Position, lookAtPosition)
                 self.bodyGyro.CFrame = targetCFrame
             end
         end)
@@ -538,7 +542,7 @@ function FlyModule:cleanupFly()
 end
 
 -- ============================================
--- DESIGN PREMIUM - TÍTULOS DAS SEÇÕES EM 13px
+-- DESIGN PREMIUM
 -- ============================================
 
 local function createUI(speedModule, jumpModule, noclipModule, flyModule)
@@ -731,7 +735,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     speedTitle.BackgroundTransparency = 1
     speedTitle.Text = "VELOCIDADE"
     speedTitle.TextColor3 = theme.textSecondary
-    speedTitle.TextSize = 13 -- ALTERADO PARA 13px
+    speedTitle.TextSize = 13
     speedTitle.Font = Enum.Font.GothamBold
     speedTitle.TextXAlignment = Enum.TextXAlignment.Left
     speedTitle.TextYAlignment = Enum.TextYAlignment.Center
@@ -872,7 +876,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     divider1.Parent = content
 
     -- ============================================
-    -- SEÇÃO PULO (TÍTULO EM 13px)
+    -- SEÇÃO PULO
     -- ============================================
     local jumpSection = Instance.new("Frame")
     jumpSection.Size = UDim2.new(1, 0, 0, 95)
@@ -902,7 +906,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     jumpTitle.BackgroundTransparency = 1
     jumpTitle.Text = "PULO INFINITO"
     jumpTitle.TextColor3 = theme.textSecondary
-    jumpTitle.TextSize = 13 -- ALTERADO PARA 13px
+    jumpTitle.TextSize = 13
     jumpTitle.Font = Enum.Font.GothamBold
     jumpTitle.TextXAlignment = Enum.TextXAlignment.Left
     jumpTitle.TextYAlignment = Enum.TextYAlignment.Center
@@ -949,7 +953,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     jumpStatusLabel.Parent = jumpStatusContainer
 
     -- ============================================
-    -- SEÇÃO NOCLIP (TÍTULO EM 13px)
+    -- SEÇÃO NOCLIP
     -- ============================================
     local noclipSection = Instance.new("Frame")
     noclipSection.Size = UDim2.new(1, 0, 0, 85)
@@ -979,7 +983,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     noclipTitle.BackgroundTransparency = 1
     noclipTitle.Text = "NOCLIP"
     noclipTitle.TextColor3 = theme.textSecondary
-    noclipTitle.TextSize = 13 -- ALTERADO PARA 13px
+    noclipTitle.TextSize = 13
     noclipTitle.Font = Enum.Font.GothamBold
     noclipTitle.TextXAlignment = Enum.TextXAlignment.Left
     noclipTitle.TextYAlignment = Enum.TextYAlignment.Center
@@ -1026,7 +1030,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     noclipStatusLabel.Parent = noclipStatusContainer
 
     -- ============================================
-    -- SEÇÃO VOO (FLY) - TÍTULO EM 13px
+    -- SEÇÃO VOO (FLY)
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 120)
@@ -1056,7 +1060,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     flyTitle.BackgroundTransparency = 1
     flyTitle.Text = "FLY"
     flyTitle.TextColor3 = theme.textSecondary
-    flyTitle.TextSize = 13 -- ALTERADO PARA 13px
+    flyTitle.TextSize = 13
     flyTitle.Font = Enum.Font.GothamBold
     flyTitle.TextXAlignment = Enum.TextXAlignment.Left
     flyTitle.TextYAlignment = Enum.TextYAlignment.Center
@@ -1548,8 +1552,8 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     updateFlySliderUI(flyModule.speed)
 
     print("=" .. string.rep("=", 50))
-    print("⚡ Speed Control Pro v2.8 - Títulos em 13px")
-    print("🎨 Design Premium - Títulos equilibrados")
+    print("⚡ Speed Control Pro v2.8 - Voo com orientação pela câmera")
+    print("🎨 Design Premium - Personagem olha para onde a câmera aponta")
     print("=" .. string.rep("=", 50))
 
     return gui
@@ -1560,7 +1564,7 @@ end
 -- ============================================
 
 print("=" .. string.rep("=", 50))
-print("⚡ Speed Control Pro v2.8 - Títulos em 13px")
+print("⚡ Speed Control Pro v2.8 - Voo com orientação pela câmera")
 print("📋 Carregando módulos...")
 print("=" .. string.rep("=", 50) .. "\n")
 
