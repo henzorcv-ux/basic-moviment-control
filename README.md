@@ -1,22 +1,23 @@
 --[[
-    Speed Control Pro v2.8 + Infinite Jump + Noclip
-    Design Premium - Botão Pulo com OFF/ON + Botão Noclip
-    + Botão Noclip em Y=210 (extremamente próximo)
+    Speed Control Pro v2.8 + Infinite Jump + Noclip + Fly
+    Design Premium - Textos de status em 10px
 --]]
 
 -- ============================================
 -- SERVIÇOS E BIBLIOTECAS
 -- ============================================
 
-local Players, UIS, CoreGui, RunService, VirtualUser, TweenService = 
+local Players, UIS, CoreGui, RunService, VirtualUser, TweenService, UserInputService = 
     game:GetService("Players"), 
     game:GetService("UserInputService"), 
     game:GetService("CoreGui"), 
     game:GetService("RunService"), 
     game:GetService("VirtualUser"), 
-    game:GetService("TweenService")
+    game:GetService("TweenService"),
+    game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
+local mouse = player:GetMouse()
 
 -- ============================================
 -- SISTEMA DE EVENTOS
@@ -64,7 +65,8 @@ function ConfigManager.new()
     local self = setmetatable({}, ConfigManager)
     self.data = {
         speed = { value = 16, min = 5, max = 500 },
-        features = { speedControl = false, infiniteJump = false, noclip = false },
+        flySpeed = { value = 1, min = 1, max = 10 },
+        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false },
         window = { minimized = false }
     }
     return self
@@ -359,10 +361,188 @@ function NoclipModule:setupNoclip()
 end
 
 -- ============================================
--- DESIGN PREMIUM - BOTÃO NOCLIP EM Y=210
+-- MÓDULO DE VOO (FLY) COM ESCALA DE VELOCIDADE
 -- ============================================
 
-local function createUI(speedModule, jumpModule, noclipModule)
+local FlyModule = {}
+FlyModule.__index = FlyModule
+
+function FlyModule.new(config)
+    local self = setmetatable({}, FlyModule)
+    self.config = config
+    self.isEnabled = false
+    self.isFlying = false
+    self.bodyVelocity = nil
+    self.bodyGyro = nil
+    self.connections = {}
+    self.speed = config:get("flySpeed.value") or 1
+    self.fKeyConnection = nil
+    return self
+end
+
+function FlyModule:getRealSpeed()
+    return 50 + (self.speed * 10)
+end
+
+function FlyModule:enable()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    self.isFlying = false
+    self.config:set("features.fly", true)
+    self:setupFlyControls()
+    self:setupKeyToggle()
+    print("✈️ Fly ATIVADO! Pressione F para voar. Velocidade base: " .. self:getRealSpeed())
+end
+
+function FlyModule:disable()
+    self.isEnabled = false
+    self.isFlying = false
+    self.config:set("features.fly", false)
+    self:cleanupFly()
+    if self.fKeyConnection then
+        self.fKeyConnection:Disconnect()
+        self.fKeyConnection = nil
+    end
+    print("✈️ Fly DESATIVADO!")
+end
+
+function FlyModule:setSpeed(value)
+    self.speed = math.clamp(value, 1, 10)
+    self.config:set("flySpeed.value", self.speed)
+    print("✈️ Velocidade do voo ajustada para: " .. self.speed .. " (equivalente a " .. self:getRealSpeed() .. ")")
+end
+
+function FlyModule:toggleFly()
+    if not self.isEnabled then return end
+    
+    self.isFlying = not self.isFlying
+    
+    if self.isFlying then
+        self:startFly()
+        print("✈️ Voo ATIVADO (F) - Velocidade: " .. self:getRealSpeed())
+    else
+        self:stopFly()
+        print("✈️ Voo DESATIVADO (F)")
+    end
+end
+
+function FlyModule:setupKeyToggle()
+    if self.fKeyConnection then
+        self.fKeyConnection:Disconnect()
+        self.fKeyConnection = nil
+    end
+    
+    self.fKeyConnection = UIS.InputBegan:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.F and self.isEnabled then
+            self:toggleFly()
+        end
+    end)
+end
+
+function FlyModule:startFly()
+    if not self.isEnabled then return end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = true
+    end
+
+    if not self.bodyVelocity then
+        self.bodyVelocity = Instance.new("BodyVelocity")
+        self.bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        self.bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+        self.bodyVelocity.Parent = rootPart
+    end
+
+    if not self.bodyGyro then
+        self.bodyGyro = Instance.new("BodyGyro")
+        self.bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+        self.bodyGyro.Parent = rootPart
+    end
+    
+    if #self.connections == 0 then
+        local flyConnection = RunService.RenderStepped:Connect(function()
+            if not self.isFlying or not rootPart.Parent then 
+                if self.bodyVelocity then self.bodyVelocity.Velocity = Vector3.new(0, 0, 0) end
+                return 
+            end
+            
+            local moveDirection = Vector3.new(0, 0, 0)
+            
+            if UIS:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + Vector3.new(0, 0, -1) end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection + Vector3.new(0, 0, 1) end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection + Vector3.new(-1, 0, 0) end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + Vector3.new(1, 0, 0) end
+            
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDirection = moveDirection + Vector3.new(0, 1, 0) end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then moveDirection = moveDirection + Vector3.new(0, -1, 0) end
+            
+            if moveDirection.Magnitude > 0 then
+                moveDirection = moveDirection.Unit
+            end
+            
+            local camera = workspace.CurrentCamera
+            if camera then
+                local forward = camera.CFrame.LookVector
+                local right = camera.CFrame.RightVector
+                local up = camera.CFrame.UpVector
+                
+                local moveVector = (forward * -moveDirection.Z) + (right * moveDirection.X) + (up * moveDirection.Y)
+                self.bodyVelocity.Velocity = moveVector * self:getRealSpeed()
+                
+                local mousePos = mouse.Hit.Position
+                local targetCFrame = CFrame.new(rootPart.Position, mousePos)
+                self.bodyGyro.CFrame = targetCFrame
+            end
+        end)
+        table.insert(self.connections, flyConnection)
+    end
+end
+
+function FlyModule:stopFly()
+    self.isFlying = false
+    self:cleanupFly()
+end
+
+function FlyModule:setupFlyControls()
+end
+
+function FlyModule:cleanupFly()
+    for _, conn in ipairs(self.connections) do
+        conn:Disconnect()
+    end
+    self.connections = {}
+    
+    if self.bodyVelocity then
+        self.bodyVelocity:Destroy()
+        self.bodyVelocity = nil
+    end
+    
+    if self.bodyGyro then
+        self.bodyGyro:Destroy()
+        self.bodyGyro = nil
+    end
+    
+    local character = player.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+    end
+end
+
+-- ============================================
+-- DESIGN PREMIUM - TEXTOS DE STATUS EM 10px
+-- ============================================
+
+local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     local gui = Instance.new("ScreenGui")
     gui.Name, gui.Parent = "SpeedControlGUI", CoreGui
     gui.ResetOnSpawn, gui.IgnoreGuiInset = false, true
@@ -387,14 +567,16 @@ local function createUI(speedModule, jumpModule, noclipModule)
         jumpGlow = Color3.fromRGB(255, 50, 120),
         noclipColor = Color3.fromRGB(150, 100, 255),
         noclipGlow = Color3.fromRGB(120, 50, 255),
+        flyColor = Color3.fromRGB(0, 230, 255),
+        flyGlow = Color3.fromRGB(0, 180, 255),
         gradient1 = Color3.fromRGB(100, 180, 255),
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
     -- ===== JANELA PRINCIPAL =====
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 260, 0, 380)
-    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -190)
+    mainFrame.Size = UDim2.new(0, 260, 0, 480)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -240)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 1
@@ -406,7 +588,6 @@ local function createUI(speedModule, jumpModule, noclipModule)
     corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = mainFrame
 
-    -- Sombra
     local shadow = Instance.new("Frame")
     shadow.Size = UDim2.new(1, 16, 1, 16)
     shadow.Position = UDim2.new(0, -8, 0, -8)
@@ -432,7 +613,6 @@ local function createUI(speedModule, jumpModule, noclipModule)
     headerCorner.CornerRadius = UDim.new(0, 12)
     headerCorner.Parent = header
 
-    -- Gradiente do cabeçalho
     local gradient = Instance.new("UIGradient")
     gradient.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, theme.gradient1),
@@ -441,7 +621,6 @@ local function createUI(speedModule, jumpModule, noclipModule)
     gradient.Rotation = 45
     gradient.Parent = header
 
-    -- Ícone e Título
     local titleIcon = Instance.new("TextLabel")
     titleIcon.Size = UDim2.new(0, 24, 0, 24)
     titleIcon.Position = UDim2.new(0, 10, 0.5, -12)
@@ -470,15 +649,14 @@ local function createUI(speedModule, jumpModule, noclipModule)
     subtitle.Size = UDim2.new(0.5, 0, 1, 0)
     subtitle.Position = UDim2.new(0, 38, 0, 0)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Velocidade • Pulo • Noclip"
+    subtitle.Text = "Velocidade • Pulo • Noclip • Fly"
     subtitle.TextColor3 = theme.textSecondary
-    subtitle.TextSize = 8
+    subtitle.TextSize = 7
     subtitle.Font = Enum.Font.Gotham
     subtitle.TextXAlignment = Enum.TextXAlignment.Left
     subtitle.TextYAlignment = Enum.TextYAlignment.Bottom
     subtitle.Parent = header
 
-    -- Botões do cabeçalho
     local headerButtons = Instance.new("Frame")
     headerButtons.Size = UDim2.new(0, 56, 1, 0)
     headerButtons.Position = UDim2.new(1, -60, 0, 0)
@@ -524,13 +702,14 @@ local function createUI(speedModule, jumpModule, noclipModule)
     content.BackgroundTransparency = 1
     content.Parent = mainFrame
 
-    -- ===== SEÇÃO VELOCIDADE =====
+    -- ============================================
+    -- SEÇÃO VELOCIDADE
+    -- ============================================
     local speedSection = Instance.new("Frame")
     speedSection.Size = UDim2.new(1, 0, 0, 135)
     speedSection.BackgroundTransparency = 1
     speedSection.Parent = content
 
-    -- Título da seção
     local speedTitleContainer = Instance.new("Frame")
     speedTitleContainer.Size = UDim2.new(1, 0, 0, 20)
     speedTitleContainer.BackgroundTransparency = 1
@@ -559,7 +738,6 @@ local function createUI(speedModule, jumpModule, noclipModule)
     speedTitle.TextYAlignment = Enum.TextYAlignment.Center
     speedTitle.Parent = speedTitleContainer
 
-    -- Display de velocidade
     local speedDisplay = Instance.new("Frame")
     speedDisplay.Size = UDim2.new(0, 96, 0, 50)
     speedDisplay.Position = UDim2.new(0.5, -48, 0, 24)
@@ -597,7 +775,6 @@ local function createUI(speedModule, jumpModule, noclipModule)
     speedUnit.TextYAlignment = Enum.TextYAlignment.Top
     speedUnit.Parent = speedDisplay
 
-    -- Slider
     local sliderContainer = Instance.new("Frame")
     sliderContainer.Size = UDim2.new(1, -16, 0, 24)
     sliderContainer.Position = UDim2.new(0, 8, 0, 80)
@@ -663,7 +840,6 @@ local function createUI(speedModule, jumpModule, noclipModule)
     buttonCorner.CornerRadius = UDim.new(1, 0)
     buttonCorner.Parent = sliderButton
 
-    -- Botão de velocidade (TAMANHO 96x32)
     local speedToggleContainer = Instance.new("Frame")
     speedToggleContainer.Size = UDim2.new(1, 0, 0, 40)
     speedToggleContainer.Position = UDim2.new(0, 0, 0, 106)
@@ -696,14 +872,15 @@ local function createUI(speedModule, jumpModule, noclipModule)
     divider1.BorderSizePixel = 0
     divider1.Parent = content
 
-    -- ===== SEÇÃO PULO (COM BOTÃO 96x32) =====
+    -- ============================================
+    -- SEÇÃO PULO (TEXTO EM 10px)
+    -- ============================================
     local jumpSection = Instance.new("Frame")
-    jumpSection.Size = UDim2.new(1, 0, 0, 100)
+    jumpSection.Size = UDim2.new(1, 0, 0, 95)
     jumpSection.Position = UDim2.new(0, 0, 0, 143)
     jumpSection.BackgroundTransparency = 1
     jumpSection.Parent = content
 
-    -- Título da seção
     local jumpTitleContainer = Instance.new("Frame")
     jumpTitleContainer.Size = UDim2.new(1, 0, 0, 18)
     jumpTitleContainer.BackgroundTransparency = 1
@@ -732,9 +909,8 @@ local function createUI(speedModule, jumpModule, noclipModule)
     jumpTitle.TextYAlignment = Enum.TextYAlignment.Center
     jumpTitle.Parent = jumpTitleContainer
 
-    -- Botão de pulo (96x32)
     local jumpToggleContainer = Instance.new("Frame")
-    jumpToggleContainer.Size = UDim2.new(1, 0, 0, 38)
+    jumpToggleContainer.Size = UDim2.new(1, 0, 0, 36)
     jumpToggleContainer.Position = UDim2.new(0, 0, 0, 20)
     jumpToggleContainer.BackgroundTransparency = 1
     jumpToggleContainer.Parent = jumpSection
@@ -756,10 +932,10 @@ local function createUI(speedModule, jumpModule, noclipModule)
     jumpBtnCorner.CornerRadius = UDim.new(0, 8)
     jumpBtnCorner.Parent = jumpToggleBtn
 
-    -- Label de status (reduzido)
+    -- STATUS DO PULO - TEXTO EM 10px
     local jumpStatusContainer = Instance.new("Frame")
-    jumpStatusContainer.Size = UDim2.new(1, 0, 0, 14)
-    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 62)
+    jumpStatusContainer.Size = UDim2.new(1, 0, 0, 16) -- Aumentado para acomodar texto 10px
+    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 60) -- Ajustado
     jumpStatusContainer.BackgroundTransparency = 1
     jumpStatusContainer.Parent = jumpSection
 
@@ -768,22 +944,21 @@ local function createUI(speedModule, jumpModule, noclipModule)
     jumpStatusLabel.BackgroundTransparency = 1
     jumpStatusLabel.Text = "Espaço para pular"
     jumpStatusLabel.TextColor3 = theme.textMuted
-    jumpStatusLabel.TextSize = 7
+    jumpStatusLabel.TextSize = 10 -- ALTERADO PARA 10px
     jumpStatusLabel.Font = Enum.Font.Gotham
     jumpStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
     jumpStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
     jumpStatusLabel.Parent = jumpStatusContainer
 
-    -- ===== DIVISOR 2 (REMOVIDO) =====
-
-    -- ===== SEÇÃO NOCLIP (DEFINIDA EM Y=210) =====
+    -- ============================================
+    -- SEÇÃO NOCLIP (TEXTO EM 10px)
+    -- ============================================
     local noclipSection = Instance.new("Frame")
     noclipSection.Size = UDim2.new(1, 0, 0, 85)
-    noclipSection.Position = UDim2.new(0, 0, 0, 210) -- DEFINIDO EXATAMENTE EM Y=210
+    noclipSection.Position = UDim2.new(0, 0, 0, 210)
     noclipSection.BackgroundTransparency = 1
     noclipSection.Parent = content
 
-    -- Título da seção
     local noclipTitleContainer = Instance.new("Frame")
     noclipTitleContainer.Size = UDim2.new(1, 0, 0, 18)
     noclipTitleContainer.BackgroundTransparency = 1
@@ -804,7 +979,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     noclipTitle.Size = UDim2.new(1, -18, 1, 0)
     noclipTitle.Position = UDim2.new(0, 18, 0, 0)
     noclipTitle.BackgroundTransparency = 1
-    noclipTitle.Text = "MODO NOCLIP"
+    noclipTitle.Text = "NOCLIP"
     noclipTitle.TextColor3 = theme.textSecondary
     noclipTitle.TextSize = 8
     noclipTitle.Font = Enum.Font.GothamBold
@@ -812,9 +987,8 @@ local function createUI(speedModule, jumpModule, noclipModule)
     noclipTitle.TextYAlignment = Enum.TextYAlignment.Center
     noclipTitle.Parent = noclipTitleContainer
 
-    -- Botão de noclip (96x32)
     local noclipToggleContainer = Instance.new("Frame")
-    noclipToggleContainer.Size = UDim2.new(1, 0, 0, 38)
+    noclipToggleContainer.Size = UDim2.new(1, 0, 0, 36)
     noclipToggleContainer.Position = UDim2.new(0, 0, 0, 20)
     noclipToggleContainer.BackgroundTransparency = 1
     noclipToggleContainer.Parent = noclipSection
@@ -836,10 +1010,10 @@ local function createUI(speedModule, jumpModule, noclipModule)
     noclipBtnCorner.CornerRadius = UDim.new(0, 8)
     noclipBtnCorner.Parent = noclipToggleBtn
 
-    -- Label de status (reduzido)
+    -- STATUS DO NOCLIP - TEXTO EM 10px
     local noclipStatusContainer = Instance.new("Frame")
-    noclipStatusContainer.Size = UDim2.new(1, 0, 0, 14)
-    noclipStatusContainer.Position = UDim2.new(0, 0, 0, 62)
+    noclipStatusContainer.Size = UDim2.new(1, 0, 0, 16) -- Aumentado
+    noclipStatusContainer.Position = UDim2.new(0, 0, 0, 60) -- Ajustado
     noclipStatusContainer.BackgroundTransparency = 1
     noclipStatusContainer.Parent = noclipSection
 
@@ -848,14 +1022,194 @@ local function createUI(speedModule, jumpModule, noclipModule)
     noclipStatusLabel.BackgroundTransparency = 1
     noclipStatusLabel.Text = "Atravesse paredes"
     noclipStatusLabel.TextColor3 = theme.textMuted
-    noclipStatusLabel.TextSize = 7
+    noclipStatusLabel.TextSize = 10 -- ALTERADO PARA 10px
     noclipStatusLabel.Font = Enum.Font.Gotham
     noclipStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
     noclipStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
     noclipStatusLabel.Parent = noclipStatusContainer
 
     -- ============================================
-    -- LÓGICA DO SLIDER
+    -- SEÇÃO VOO (FLY) - TEXTO EM 10px
+    -- ============================================
+    local flySection = Instance.new("Frame")
+    flySection.Size = UDim2.new(1, 0, 0, 120)
+    flySection.Position = UDim2.new(0, 0, 0, 280)
+    flySection.BackgroundTransparency = 1
+    flySection.Parent = content
+
+    local flyTitleContainer = Instance.new("Frame")
+    flyTitleContainer.Size = UDim2.new(1, 0, 0, 18)
+    flyTitleContainer.BackgroundTransparency = 1
+    flyTitleContainer.Parent = flySection
+
+    local flyTitleIcon = Instance.new("TextLabel")
+    flyTitleIcon.Size = UDim2.new(0, 14, 1, 0)
+    flyTitleIcon.BackgroundTransparency = 1
+    flyTitleIcon.Text = "✈️"
+    flyTitleIcon.TextColor3 = theme.flyColor
+    flyTitleIcon.TextSize = 11
+    flyTitleIcon.Font = Enum.Font.GothamBold
+    flyTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
+    flyTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
+    flyTitleIcon.Parent = flyTitleContainer
+
+    local flyTitle = Instance.new("TextLabel")
+    flyTitle.Size = UDim2.new(1, -18, 1, 0)
+    flyTitle.Position = UDim2.new(0, 18, 0, 0)
+    flyTitle.BackgroundTransparency = 1
+    flyTitle.Text = "FLY"
+    flyTitle.TextColor3 = theme.textSecondary
+    flyTitle.TextSize = 8
+    flyTitle.Font = Enum.Font.GothamBold
+    flyTitle.TextXAlignment = Enum.TextXAlignment.Left
+    flyTitle.TextYAlignment = Enum.TextYAlignment.Center
+    flyTitle.Parent = flyTitleContainer
+
+    local flySpeedDisplay = Instance.new("Frame")
+    flySpeedDisplay.Size = UDim2.new(0, 80, 0, 30)
+    flySpeedDisplay.Position = UDim2.new(0.5, -40, 0, 22)
+    flySpeedDisplay.BackgroundColor3 = theme.surface2
+    flySpeedDisplay.BackgroundTransparency = 0.3
+    flySpeedDisplay.BorderSizePixel = 1
+    flySpeedDisplay.BorderColor3 = theme.border
+    flySpeedDisplay.Parent = flySection
+
+    local flyDisplayCorner = Instance.new("UICorner")
+    flyDisplayCorner.CornerRadius = UDim.new(0, 8)
+    flyDisplayCorner.Parent = flySpeedDisplay
+
+    local flySpeedValue = Instance.new("TextLabel")
+    flySpeedValue.Size = UDim2.new(1, 0, 0.6, 0)
+    flySpeedValue.Position = UDim2.new(0, 0, 0.1, 0)
+    flySpeedValue.BackgroundTransparency = 1
+    flySpeedValue.Text = tostring(flyModule.speed)
+    flySpeedValue.TextColor3 = theme.flyColor
+    flySpeedValue.TextSize = 20
+    flySpeedValue.Font = Enum.Font.GothamBold
+    flySpeedValue.TextXAlignment = Enum.TextXAlignment.Center
+    flySpeedValue.TextYAlignment = Enum.TextYAlignment.Bottom
+    flySpeedValue.Parent = flySpeedDisplay
+
+    local flySpeedUnit = Instance.new("TextLabel")
+    flySpeedUnit.Size = UDim2.new(1, 0, 0.3, 0)
+    flySpeedUnit.Position = UDim2.new(0, 0, 0.65, 0)
+    flySpeedUnit.BackgroundTransparency = 1
+    flySpeedUnit.Text = "FLY VEL"
+    flySpeedUnit.TextColor3 = theme.textMuted
+    flySpeedUnit.TextSize = 6
+    flySpeedUnit.Font = Enum.Font.Gotham
+    flySpeedUnit.TextXAlignment = Enum.TextXAlignment.Center
+    flySpeedUnit.TextYAlignment = Enum.TextYAlignment.Top
+    flySpeedUnit.Parent = flySpeedDisplay
+
+    local flySliderContainer = Instance.new("Frame")
+    flySliderContainer.Size = UDim2.new(1, -16, 0, 20)
+    flySliderContainer.Position = UDim2.new(0, 8, 0, 56)
+    flySliderContainer.BackgroundTransparency = 1
+    flySliderContainer.ClipsDescendants = true
+    flySliderContainer.Parent = flySection
+
+    local flyMinLabel = Instance.new("TextLabel")
+    flyMinLabel.Size = UDim2.new(0, 18, 1, 0)
+    flyMinLabel.BackgroundTransparency = 1
+    flyMinLabel.Text = "1"
+    flyMinLabel.TextColor3 = theme.textMuted
+    flyMinLabel.TextSize = 7
+    flyMinLabel.Font = Enum.Font.Gotham
+    flyMinLabel.TextXAlignment = Enum.TextXAlignment.Center
+    flyMinLabel.TextYAlignment = Enum.TextYAlignment.Center
+    flyMinLabel.Parent = flySliderContainer
+
+    local flyMaxLabel = Instance.new("TextLabel")
+    flyMaxLabel.Size = UDim2.new(0, 18, 1, 0)
+    flyMaxLabel.Position = UDim2.new(1, -18, 0, 0)
+    flyMaxLabel.BackgroundTransparency = 1
+    flyMaxLabel.Text = "10"
+    flyMaxLabel.TextColor3 = theme.textMuted
+    flyMaxLabel.TextSize = 7
+    flyMaxLabel.Font = Enum.Font.Gotham
+    flyMaxLabel.TextXAlignment = Enum.TextXAlignment.Center
+    flyMaxLabel.TextYAlignment = Enum.TextYAlignment.Center
+    flyMaxLabel.Parent = flySliderContainer
+
+    local flySliderTrack = Instance.new("Frame")
+    flySliderTrack.Size = UDim2.new(1, -52, 0, 3)
+    flySliderTrack.Position = UDim2.new(0, 26, 0.5, -1.5)
+    flySliderTrack.BackgroundColor3 = theme.surface3
+    flySliderTrack.BorderSizePixel = 0
+    flySliderTrack.ClipsDescendants = true
+    flySliderTrack.Parent = flySliderContainer
+
+    local flyTrackCorner = Instance.new("UICorner")
+    flyTrackCorner.CornerRadius = UDim.new(0, 2)
+    flyTrackCorner.Parent = flySliderTrack
+
+    local flySliderFill = Instance.new("Frame")
+    flySliderFill.Size = UDim2.new(0, 0, 1, 0)
+    flySliderFill.BackgroundColor3 = theme.flyColor
+    flySliderFill.BorderSizePixel = 0
+    flySliderFill.Parent = flySliderTrack
+
+    local flyFillCorner = Instance.new("UICorner")
+    flyFillCorner.CornerRadius = UDim.new(0, 2)
+    flyFillCorner.Parent = flySliderFill
+
+    local flySliderButton = Instance.new("TextButton")
+    flySliderButton.Size = UDim2.new(0, 12, 0, 12)
+    flySliderButton.Position = UDim2.new(0, 0, 0.5, -6)
+    flySliderButton.BackgroundColor3 = theme.flyColor
+    flySliderButton.BorderSizePixel = 2
+    flySliderButton.BorderColor3 = theme.background
+    flySliderButton.Text = ""
+    flySliderButton.Parent = flySliderContainer
+
+    local flyButtonCorner = Instance.new("UICorner")
+    flyButtonCorner.CornerRadius = UDim.new(1, 0)
+    flyButtonCorner.Parent = flySliderButton
+
+    local flyToggleContainer = Instance.new("Frame")
+    flyToggleContainer.Size = UDim2.new(1, 0, 0, 36)
+    flyToggleContainer.Position = UDim2.new(0, 0, 0, 78)
+    flyToggleContainer.BackgroundTransparency = 1
+    flyToggleContainer.Parent = flySection
+
+    local flyToggleBtn = Instance.new("TextButton")
+    flyToggleBtn.Size = UDim2.new(0, 96, 0, 32)
+    flyToggleBtn.Position = UDim2.new(0.5, -48, 0.5, -16)
+    flyToggleBtn.BackgroundColor3 = theme.danger
+    flyToggleBtn.BackgroundTransparency = 0.2
+    flyToggleBtn.Text = "OFF"
+    flyToggleBtn.TextColor3 = theme.danger
+    flyToggleBtn.TextSize = 14
+    flyToggleBtn.Font = Enum.Font.GothamBold
+    flyToggleBtn.BorderSizePixel = 2
+    flyToggleBtn.BorderColor3 = theme.danger
+    flyToggleBtn.Parent = flyToggleContainer
+
+    local flyBtnCorner = Instance.new("UICorner")
+    flyBtnCorner.CornerRadius = UDim.new(0, 8)
+    flyBtnCorner.Parent = flyToggleBtn
+
+    -- STATUS DO FLY - TEXTO EM 10px
+    local flyStatusContainer = Instance.new("Frame")
+    flyStatusContainer.Size = UDim2.new(1, 0, 0, 16) -- Aumentado
+    flyStatusContainer.Position = UDim2.new(0, 0, 0, 116) -- Ajustado
+    flyStatusContainer.BackgroundTransparency = 1
+    flyStatusContainer.Parent = flySection
+
+    local flyStatusLabel = Instance.new("TextLabel")
+    flyStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+    flyStatusLabel.BackgroundTransparency = 1
+    flyStatusLabel.Text = "Pressione F para voar"
+    flyStatusLabel.TextColor3 = theme.textMuted
+    flyStatusLabel.TextSize = 10 -- ALTERADO PARA 10px
+    flyStatusLabel.Font = Enum.Font.Gotham
+    flyStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+    flyStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
+    flyStatusLabel.Parent = flyStatusContainer
+
+    -- ============================================
+    -- LÓGICA DO SLIDER (VELOCIDADE PRINCIPAL)
     -- ============================================
 
     local isDragging, minValue, maxValue = false, 5, 500
@@ -930,10 +1284,76 @@ local function createUI(speedModule, jumpModule, noclipModule)
     end)
 
     -- ============================================
-    -- LÓGICA DOS TOGGLES
+    -- LÓGICA DO SLIDER DE VELOCIDADE DE VOO
     -- ============================================
 
-    -- Toggle de Velocidade
+    local flyMinVal, flyMaxVal = 1, 10
+    local isFlyDragging = false
+
+    local function calculateFlySliderPosition(value)
+        return math.clamp((value - flyMinVal) / (flyMaxVal - flyMinVal), 0, 1)
+    end
+
+    local function updateFlySliderUI(value)
+        local percent = calculateFlySliderPosition(value)
+        local containerWidth = flySliderContainer.AbsoluteSize.X
+        local trackWidth = containerWidth - 52
+        local buttonPos = percent * trackWidth
+        flySliderButton.Position = UDim2.new(0, 26 + buttonPos - 6, 0.5, -6)
+        flySliderFill.Size = UDim2.new(math.clamp(percent, 0, 1), 0, 1, 0)
+        flySpeedValue.Text = tostring(math.floor(value))
+    end
+
+    local function updateFlySpeed(value)
+        value = math.clamp(value, flyMinVal, flyMaxVal)
+        flyModule:setSpeed(value)
+        updateFlySliderUI(value)
+    end
+
+    local function getFlySpeedFromMousePosition(input)
+        local containerPos = flySliderContainer.AbsolutePosition.X
+        local containerSize = flySliderContainer.AbsoluteSize.X
+        local trackStart = containerPos + 26
+        local trackEnd = containerPos + containerSize - 26
+        local mouseX = input.Position.X
+        local percent = math.clamp((mouseX - trackStart) / (trackEnd - trackStart), 0, 1)
+        return flyMinVal + (flyMaxVal - flyMinVal) * percent
+    end
+
+    flySliderButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isFlyDragging = true
+            updateFlySpeed(getFlySpeedFromMousePosition(input))
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(input)
+        if isFlyDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateFlySpeed(getFlySpeedFromMousePosition(input))
+        end
+    end)
+
+    flySliderButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then 
+            isFlyDragging = false 
+        end
+    end)
+
+    flySliderTrack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local trackPos = flySliderTrack.AbsolutePosition.X
+            local trackSize = flySliderTrack.AbsoluteSize.X
+            local mouseX = input.Position.X
+            local percent = math.clamp((mouseX - trackPos) / trackSize, 0, 1)
+            local newValue = flyMinVal + (flyMaxVal - flyMinVal) * percent
+            updateFlySpeed(newValue)
+        end
+    end)
+
+    -- ============================================
+    -- LÓGICA DOS TOGGLES (COM ATUALIZAÇÃO DOS TEXTOS)
+    -- ============================================
+
     speedToggleBtn.MouseButton1Click:Connect(function()
         speedIsActive = not speedIsActive
         if speedIsActive then
@@ -955,7 +1375,6 @@ local function createUI(speedModule, jumpModule, noclipModule)
         end
     end)
 
-    -- Toggle de Pulo
     local jumpIsActive = false
 
     jumpToggleBtn.MouseButton1Click:Connect(function()
@@ -970,6 +1389,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
             jumpToggleBtn.BorderColor3 = theme.success
             jumpStatusLabel.Text = "✅ Pulo ativado"
             jumpStatusLabel.TextColor3 = theme.success
+            jumpStatusLabel.TextSize = 10 -- Mantém 10px
         else
             jumpModule:disable()
             jumpToggleBtn.BackgroundColor3 = theme.danger
@@ -979,10 +1399,10 @@ local function createUI(speedModule, jumpModule, noclipModule)
             jumpToggleBtn.BorderColor3 = theme.danger
             jumpStatusLabel.Text = "Espaço para pular"
             jumpStatusLabel.TextColor3 = theme.textMuted
+            jumpStatusLabel.TextSize = 10 -- Mantém 10px
         end
     end)
 
-    -- Toggle de Noclip
     local noclipIsActive = false
 
     noclipToggleBtn.MouseButton1Click:Connect(function()
@@ -997,6 +1417,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
             noclipToggleBtn.BorderColor3 = theme.success
             noclipStatusLabel.Text = "👻 Noclip ativado"
             noclipStatusLabel.TextColor3 = theme.success
+            noclipStatusLabel.TextSize = 10 -- Mantém 10px
         else
             noclipModule:disable()
             noclipToggleBtn.BackgroundColor3 = theme.danger
@@ -1006,6 +1427,35 @@ local function createUI(speedModule, jumpModule, noclipModule)
             noclipToggleBtn.BorderColor3 = theme.danger
             noclipStatusLabel.Text = "Atravesse paredes"
             noclipStatusLabel.TextColor3 = theme.textMuted
+            noclipStatusLabel.TextSize = 10 -- Mantém 10px
+        end
+    end)
+
+    local flyIsActive = false
+
+    flyToggleBtn.MouseButton1Click:Connect(function()
+        flyIsActive = not flyIsActive
+
+        if flyIsActive then
+            flyModule:enable()
+            flyToggleBtn.BackgroundColor3 = theme.success
+            flyToggleBtn.BackgroundTransparency = 0.15
+            flyToggleBtn.Text = "ON"
+            flyToggleBtn.TextColor3 = theme.success
+            flyToggleBtn.BorderColor3 = theme.success
+            flyStatusLabel.Text = "✈️ Fly ativado (F para voar)"
+            flyStatusLabel.TextColor3 = theme.success
+            flyStatusLabel.TextSize = 10 -- Mantém 10px
+        else
+            flyModule:disable()
+            flyToggleBtn.BackgroundColor3 = theme.danger
+            flyToggleBtn.BackgroundTransparency = 0.2
+            flyToggleBtn.Text = "OFF"
+            flyToggleBtn.TextColor3 = theme.danger
+            flyToggleBtn.BorderColor3 = theme.danger
+            flyStatusLabel.Text = "Pressione F para voar"
+            flyStatusLabel.TextColor3 = theme.textMuted
+            flyStatusLabel.TextSize = 10 -- Mantém 10px
         end
     end)
 
@@ -1013,7 +1463,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
     -- SISTEMA DE MINIMIZAR
     -- ============================================
 
-    local isMinimized, fullSize = false, UDim2.new(0, 260, 0, 380)
+    local isMinimized, fullSize = false, UDim2.new(0, 260, 0, 480)
     local minimizedSize = UDim2.new(0, 260, 0, 48)
 
     local function minimizeWindow()
@@ -1030,12 +1480,13 @@ local function createUI(speedModule, jumpModule, noclipModule)
         if not isMinimized then return end
         isMinimized = false
         content.Visible = true
-        subtitle.Text = "Velocidade • Pulo • Noclip"
+        subtitle.Text = "Velocidade • Pulo • Noclip • Fly"
         TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = fullSize}):Play()
         minBtn.Text = "−"
         minBtn.TextColor3 = theme.textSecondary
         task.wait(0.4)
         updateSliderUI(currentValue)
+        updateFlySliderUI(flyModule.speed)
     end
 
     minBtn.MouseButton1Click:Connect(function()
@@ -1046,6 +1497,7 @@ local function createUI(speedModule, jumpModule, noclipModule)
         speedModule:disable()
         jumpModule:disable()
         noclipModule:disable()
+        flyModule:disable()
         gui:Destroy()
     end)
 
@@ -1087,6 +1539,9 @@ local function createUI(speedModule, jumpModule, noclipModule)
         if not isDragging then
             updateSliderUI(currentValue)
         end
+        if not isFlyDragging then
+            updateFlySliderUI(flyModule.speed)
+        end
     end)
 
     -- ============================================
@@ -1094,10 +1549,11 @@ local function createUI(speedModule, jumpModule, noclipModule)
     -- ============================================
 
     updateUI(speedModule.currentSpeed)
+    updateFlySliderUI(flyModule.speed)
 
     print("=" .. string.rep("=", 50))
-    print("⚡ Speed Control Pro v2.8 - Noclip em Y=210")
-    print("🎨 Design Premium - Botão Noclip extremamente próximo")
+    print("⚡ Speed Control Pro v2.8 - Textos em 10px")
+    print("🎨 Design Premium - Textos de status uniformes")
     print("=" .. string.rep("=", 50))
 
     return gui
@@ -1108,7 +1564,7 @@ end
 -- ============================================
 
 print("=" .. string.rep("=", 50))
-print("⚡ Speed Control Pro v2.8 - Noclip em Y=210")
+print("⚡ Speed Control Pro v2.8 - Textos em 10px")
 print("📋 Carregando módulos...")
 print("=" .. string.rep("=", 50) .. "\n")
 
@@ -1116,10 +1572,11 @@ local config = ConfigManager.new()
 local speedModule = SpeedModule.new(config)
 local jumpModule = InfiniteJumpModule.new(config)
 local noclipModule = NoclipModule.new(config)
+local flyModule = FlyModule.new(config)
 
 speedModule:initialize()
 
-local gui = createUI(speedModule, jumpModule, noclipModule)
+local gui = createUI(speedModule, jumpModule, noclipModule, flyModule)
 
 while true do 
     task.wait(1) 
