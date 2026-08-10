@@ -1,6 +1,5 @@
 --[[
-    Speed Control Pro v2.8 + Infinite Jump + Noclip + Fly
-    Design Premium - Textos de status em 10px
+    Speed Control Pro v2.8 - Títulos das seções em 13px
 --]]
 
 -- ============================================
@@ -539,7 +538,7 @@ function FlyModule:cleanupFly()
 end
 
 -- ============================================
--- DESIGN PREMIUM - TEXTOS DE STATUS EM 10px
+-- DESIGN PREMIUM - TÍTULOS DAS SEÇÕES EM 13px
 -- ============================================
 
 local function createUI(speedModule, jumpModule, noclipModule, flyModule)
@@ -711,28 +710,28 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     speedSection.Parent = content
 
     local speedTitleContainer = Instance.new("Frame")
-    speedTitleContainer.Size = UDim2.new(1, 0, 0, 20)
+    speedTitleContainer.Size = UDim2.new(1, 0, 0, 22)
     speedTitleContainer.BackgroundTransparency = 1
     speedTitleContainer.Parent = speedSection
 
     local speedTitleIcon = Instance.new("TextLabel")
-    speedTitleIcon.Size = UDim2.new(0, 16, 1, 0)
+    speedTitleIcon.Size = UDim2.new(0, 18, 1, 0)
     speedTitleIcon.BackgroundTransparency = 1
     speedTitleIcon.Text = "⚡"
     speedTitleIcon.TextColor3 = theme.accent
-    speedTitleIcon.TextSize = 12
+    speedTitleIcon.TextSize = 14
     speedTitleIcon.Font = Enum.Font.GothamBold
     speedTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
     speedTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
     speedTitleIcon.Parent = speedTitleContainer
 
     local speedTitle = Instance.new("TextLabel")
-    speedTitle.Size = UDim2.new(1, -20, 1, 0)
-    speedTitle.Position = UDim2.new(0, 20, 0, 0)
+    speedTitle.Size = UDim2.new(1, -22, 1, 0)
+    speedTitle.Position = UDim2.new(0, 22, 0, 0)
     speedTitle.BackgroundTransparency = 1
     speedTitle.Text = "VELOCIDADE"
     speedTitle.TextColor3 = theme.textSecondary
-    speedTitle.TextSize = 9
+    speedTitle.TextSize = 13 -- ALTERADO PARA 13px
     speedTitle.Font = Enum.Font.GothamBold
     speedTitle.TextXAlignment = Enum.TextXAlignment.Left
     speedTitle.TextYAlignment = Enum.TextYAlignment.Center
@@ -740,7 +739,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local speedDisplay = Instance.new("Frame")
     speedDisplay.Size = UDim2.new(0, 96, 0, 50)
-    speedDisplay.Position = UDim2.new(0.5, -48, 0, 24)
+    speedDisplay.Position = UDim2.new(0.5, -48, 0, 26)
     speedDisplay.BackgroundColor3 = theme.surface2
     speedDisplay.BackgroundTransparency = 0.3
     speedDisplay.BorderSizePixel = 1
@@ -777,7 +776,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local sliderContainer = Instance.new("Frame")
     sliderContainer.Size = UDim2.new(1, -16, 0, 24)
-    sliderContainer.Position = UDim2.new(0, 8, 0, 80)
+    sliderContainer.Position = UDim2.new(0, 8, 0, 82)
     sliderContainer.BackgroundTransparency = 1
     sliderContainer.ClipsDescendants = true
     sliderContainer.Parent = speedSection
@@ -842,7 +841,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local speedToggleContainer = Instance.new("Frame")
     speedToggleContainer.Size = UDim2.new(1, 0, 0, 40)
-    speedToggleContainer.Position = UDim2.new(0, 0, 0, 106)
+    speedToggleContainer.Position = UDim2.new(0, 0, 0, 108)
     speedToggleContainer.BackgroundTransparency = 1
     speedToggleContainer.Parent = speedSection
 
@@ -873,7 +872,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     divider1.Parent = content
 
     -- ============================================
-    -- SEÇÃO PULO (TEXTO EM 10px)
+    -- SEÇÃO PULO (TÍTULO EM 13px)
     -- ============================================
     local jumpSection = Instance.new("Frame")
     jumpSection.Size = UDim2.new(1, 0, 0, 95)
@@ -882,28 +881,28 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     jumpSection.Parent = content
 
     local jumpTitleContainer = Instance.new("Frame")
-    jumpTitleContainer.Size = UDim2.new(1, 0, 0, 18)
+    jumpTitleContainer.Size = UDim2.new(1, 0, 0, 22)
     jumpTitleContainer.BackgroundTransparency = 1
     jumpTitleContainer.Parent = jumpSection
 
     local jumpTitleIcon = Instance.new("TextLabel")
-    jumpTitleIcon.Size = UDim2.new(0, 14, 1, 0)
+    jumpTitleIcon.Size = UDim2.new(0, 18, 1, 0)
     jumpTitleIcon.BackgroundTransparency = 1
     jumpTitleIcon.Text = "🚀"
     jumpTitleIcon.TextColor3 = theme.jumpColor
-    jumpTitleIcon.TextSize = 11
+    jumpTitleIcon.TextSize = 14
     jumpTitleIcon.Font = Enum.Font.GothamBold
     jumpTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
     jumpTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
     jumpTitleIcon.Parent = jumpTitleContainer
 
     local jumpTitle = Instance.new("TextLabel")
-    jumpTitle.Size = UDim2.new(1, -18, 1, 0)
-    jumpTitle.Position = UDim2.new(0, 18, 0, 0)
+    jumpTitle.Size = UDim2.new(1, -22, 1, 0)
+    jumpTitle.Position = UDim2.new(0, 22, 0, 0)
     jumpTitle.BackgroundTransparency = 1
     jumpTitle.Text = "PULO INFINITO"
     jumpTitle.TextColor3 = theme.textSecondary
-    jumpTitle.TextSize = 8
+    jumpTitle.TextSize = 13 -- ALTERADO PARA 13px
     jumpTitle.Font = Enum.Font.GothamBold
     jumpTitle.TextXAlignment = Enum.TextXAlignment.Left
     jumpTitle.TextYAlignment = Enum.TextYAlignment.Center
@@ -911,7 +910,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local jumpToggleContainer = Instance.new("Frame")
     jumpToggleContainer.Size = UDim2.new(1, 0, 0, 36)
-    jumpToggleContainer.Position = UDim2.new(0, 0, 0, 20)
+    jumpToggleContainer.Position = UDim2.new(0, 0, 0, 24)
     jumpToggleContainer.BackgroundTransparency = 1
     jumpToggleContainer.Parent = jumpSection
 
@@ -932,10 +931,9 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     jumpBtnCorner.CornerRadius = UDim.new(0, 8)
     jumpBtnCorner.Parent = jumpToggleBtn
 
-    -- STATUS DO PULO - TEXTO EM 10px
     local jumpStatusContainer = Instance.new("Frame")
-    jumpStatusContainer.Size = UDim2.new(1, 0, 0, 16) -- Aumentado para acomodar texto 10px
-    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 60) -- Ajustado
+    jumpStatusContainer.Size = UDim2.new(1, 0, 0, 16)
+    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 64)
     jumpStatusContainer.BackgroundTransparency = 1
     jumpStatusContainer.Parent = jumpSection
 
@@ -944,14 +942,14 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     jumpStatusLabel.BackgroundTransparency = 1
     jumpStatusLabel.Text = "Espaço para pular"
     jumpStatusLabel.TextColor3 = theme.textMuted
-    jumpStatusLabel.TextSize = 10 -- ALTERADO PARA 10px
+    jumpStatusLabel.TextSize = 10
     jumpStatusLabel.Font = Enum.Font.Gotham
     jumpStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
     jumpStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
     jumpStatusLabel.Parent = jumpStatusContainer
 
     -- ============================================
-    -- SEÇÃO NOCLIP (TEXTO EM 10px)
+    -- SEÇÃO NOCLIP (TÍTULO EM 13px)
     -- ============================================
     local noclipSection = Instance.new("Frame")
     noclipSection.Size = UDim2.new(1, 0, 0, 85)
@@ -960,28 +958,28 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     noclipSection.Parent = content
 
     local noclipTitleContainer = Instance.new("Frame")
-    noclipTitleContainer.Size = UDim2.new(1, 0, 0, 18)
+    noclipTitleContainer.Size = UDim2.new(1, 0, 0, 22)
     noclipTitleContainer.BackgroundTransparency = 1
     noclipTitleContainer.Parent = noclipSection
 
     local noclipTitleIcon = Instance.new("TextLabel")
-    noclipTitleIcon.Size = UDim2.new(0, 14, 1, 0)
+    noclipTitleIcon.Size = UDim2.new(0, 18, 1, 0)
     noclipTitleIcon.BackgroundTransparency = 1
     noclipTitleIcon.Text = "👻"
     noclipTitleIcon.TextColor3 = theme.noclipColor
-    noclipTitleIcon.TextSize = 11
+    noclipTitleIcon.TextSize = 14
     noclipTitleIcon.Font = Enum.Font.GothamBold
     noclipTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
     noclipTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
     noclipTitleIcon.Parent = noclipTitleContainer
 
     local noclipTitle = Instance.new("TextLabel")
-    noclipTitle.Size = UDim2.new(1, -18, 1, 0)
-    noclipTitle.Position = UDim2.new(0, 18, 0, 0)
+    noclipTitle.Size = UDim2.new(1, -22, 1, 0)
+    noclipTitle.Position = UDim2.new(0, 22, 0, 0)
     noclipTitle.BackgroundTransparency = 1
     noclipTitle.Text = "NOCLIP"
     noclipTitle.TextColor3 = theme.textSecondary
-    noclipTitle.TextSize = 8
+    noclipTitle.TextSize = 13 -- ALTERADO PARA 13px
     noclipTitle.Font = Enum.Font.GothamBold
     noclipTitle.TextXAlignment = Enum.TextXAlignment.Left
     noclipTitle.TextYAlignment = Enum.TextYAlignment.Center
@@ -989,7 +987,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local noclipToggleContainer = Instance.new("Frame")
     noclipToggleContainer.Size = UDim2.new(1, 0, 0, 36)
-    noclipToggleContainer.Position = UDim2.new(0, 0, 0, 20)
+    noclipToggleContainer.Position = UDim2.new(0, 0, 0, 24)
     noclipToggleContainer.BackgroundTransparency = 1
     noclipToggleContainer.Parent = noclipSection
 
@@ -1010,10 +1008,9 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     noclipBtnCorner.CornerRadius = UDim.new(0, 8)
     noclipBtnCorner.Parent = noclipToggleBtn
 
-    -- STATUS DO NOCLIP - TEXTO EM 10px
     local noclipStatusContainer = Instance.new("Frame")
-    noclipStatusContainer.Size = UDim2.new(1, 0, 0, 16) -- Aumentado
-    noclipStatusContainer.Position = UDim2.new(0, 0, 0, 60) -- Ajustado
+    noclipStatusContainer.Size = UDim2.new(1, 0, 0, 16)
+    noclipStatusContainer.Position = UDim2.new(0, 0, 0, 64)
     noclipStatusContainer.BackgroundTransparency = 1
     noclipStatusContainer.Parent = noclipSection
 
@@ -1022,14 +1019,14 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     noclipStatusLabel.BackgroundTransparency = 1
     noclipStatusLabel.Text = "Atravesse paredes"
     noclipStatusLabel.TextColor3 = theme.textMuted
-    noclipStatusLabel.TextSize = 10 -- ALTERADO PARA 10px
+    noclipStatusLabel.TextSize = 10
     noclipStatusLabel.Font = Enum.Font.Gotham
     noclipStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
     noclipStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
     noclipStatusLabel.Parent = noclipStatusContainer
 
     -- ============================================
-    -- SEÇÃO VOO (FLY) - TEXTO EM 10px
+    -- SEÇÃO VOO (FLY) - TÍTULO EM 13px
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 120)
@@ -1038,28 +1035,28 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     flySection.Parent = content
 
     local flyTitleContainer = Instance.new("Frame")
-    flyTitleContainer.Size = UDim2.new(1, 0, 0, 18)
+    flyTitleContainer.Size = UDim2.new(1, 0, 0, 22)
     flyTitleContainer.BackgroundTransparency = 1
     flyTitleContainer.Parent = flySection
 
     local flyTitleIcon = Instance.new("TextLabel")
-    flyTitleIcon.Size = UDim2.new(0, 14, 1, 0)
+    flyTitleIcon.Size = UDim2.new(0, 18, 1, 0)
     flyTitleIcon.BackgroundTransparency = 1
     flyTitleIcon.Text = "✈️"
     flyTitleIcon.TextColor3 = theme.flyColor
-    flyTitleIcon.TextSize = 11
+    flyTitleIcon.TextSize = 14
     flyTitleIcon.Font = Enum.Font.GothamBold
     flyTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
     flyTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
     flyTitleIcon.Parent = flyTitleContainer
 
     local flyTitle = Instance.new("TextLabel")
-    flyTitle.Size = UDim2.new(1, -18, 1, 0)
-    flyTitle.Position = UDim2.new(0, 18, 0, 0)
+    flyTitle.Size = UDim2.new(1, -22, 1, 0)
+    flyTitle.Position = UDim2.new(0, 22, 0, 0)
     flyTitle.BackgroundTransparency = 1
     flyTitle.Text = "FLY"
     flyTitle.TextColor3 = theme.textSecondary
-    flyTitle.TextSize = 8
+    flyTitle.TextSize = 13 -- ALTERADO PARA 13px
     flyTitle.Font = Enum.Font.GothamBold
     flyTitle.TextXAlignment = Enum.TextXAlignment.Left
     flyTitle.TextYAlignment = Enum.TextYAlignment.Center
@@ -1067,7 +1064,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local flySpeedDisplay = Instance.new("Frame")
     flySpeedDisplay.Size = UDim2.new(0, 80, 0, 30)
-    flySpeedDisplay.Position = UDim2.new(0.5, -40, 0, 22)
+    flySpeedDisplay.Position = UDim2.new(0.5, -40, 0, 26)
     flySpeedDisplay.BackgroundColor3 = theme.surface2
     flySpeedDisplay.BackgroundTransparency = 0.3
     flySpeedDisplay.BorderSizePixel = 1
@@ -1104,7 +1101,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local flySliderContainer = Instance.new("Frame")
     flySliderContainer.Size = UDim2.new(1, -16, 0, 20)
-    flySliderContainer.Position = UDim2.new(0, 8, 0, 56)
+    flySliderContainer.Position = UDim2.new(0, 8, 0, 60)
     flySliderContainer.BackgroundTransparency = 1
     flySliderContainer.ClipsDescendants = true
     flySliderContainer.Parent = flySection
@@ -1169,7 +1166,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local flyToggleContainer = Instance.new("Frame")
     flyToggleContainer.Size = UDim2.new(1, 0, 0, 36)
-    flyToggleContainer.Position = UDim2.new(0, 0, 0, 78)
+    flyToggleContainer.Position = UDim2.new(0, 0, 0, 82)
     flyToggleContainer.BackgroundTransparency = 1
     flyToggleContainer.Parent = flySection
 
@@ -1190,10 +1187,9 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     flyBtnCorner.CornerRadius = UDim.new(0, 8)
     flyBtnCorner.Parent = flyToggleBtn
 
-    -- STATUS DO FLY - TEXTO EM 10px
     local flyStatusContainer = Instance.new("Frame")
-    flyStatusContainer.Size = UDim2.new(1, 0, 0, 16) -- Aumentado
-    flyStatusContainer.Position = UDim2.new(0, 0, 0, 116) -- Ajustado
+    flyStatusContainer.Size = UDim2.new(1, 0, 0, 16)
+    flyStatusContainer.Position = UDim2.new(0, 0, 0, 122)
     flyStatusContainer.BackgroundTransparency = 1
     flyStatusContainer.Parent = flySection
 
@@ -1202,7 +1198,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     flyStatusLabel.BackgroundTransparency = 1
     flyStatusLabel.Text = "Pressione F para voar"
     flyStatusLabel.TextColor3 = theme.textMuted
-    flyStatusLabel.TextSize = 10 -- ALTERADO PARA 10px
+    flyStatusLabel.TextSize = 10
     flyStatusLabel.Font = Enum.Font.Gotham
     flyStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
     flyStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
@@ -1351,7 +1347,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     end)
 
     -- ============================================
-    -- LÓGICA DOS TOGGLES (COM ATUALIZAÇÃO DOS TEXTOS)
+    -- LÓGICA DOS TOGGLES
     -- ============================================
 
     speedToggleBtn.MouseButton1Click:Connect(function()
@@ -1389,7 +1385,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             jumpToggleBtn.BorderColor3 = theme.success
             jumpStatusLabel.Text = "✅ Pulo ativado"
             jumpStatusLabel.TextColor3 = theme.success
-            jumpStatusLabel.TextSize = 10 -- Mantém 10px
+            jumpStatusLabel.TextSize = 10
         else
             jumpModule:disable()
             jumpToggleBtn.BackgroundColor3 = theme.danger
@@ -1399,7 +1395,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             jumpToggleBtn.BorderColor3 = theme.danger
             jumpStatusLabel.Text = "Espaço para pular"
             jumpStatusLabel.TextColor3 = theme.textMuted
-            jumpStatusLabel.TextSize = 10 -- Mantém 10px
+            jumpStatusLabel.TextSize = 10
         end
     end)
 
@@ -1417,7 +1413,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             noclipToggleBtn.BorderColor3 = theme.success
             noclipStatusLabel.Text = "👻 Noclip ativado"
             noclipStatusLabel.TextColor3 = theme.success
-            noclipStatusLabel.TextSize = 10 -- Mantém 10px
+            noclipStatusLabel.TextSize = 10
         else
             noclipModule:disable()
             noclipToggleBtn.BackgroundColor3 = theme.danger
@@ -1427,7 +1423,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             noclipToggleBtn.BorderColor3 = theme.danger
             noclipStatusLabel.Text = "Atravesse paredes"
             noclipStatusLabel.TextColor3 = theme.textMuted
-            noclipStatusLabel.TextSize = 10 -- Mantém 10px
+            noclipStatusLabel.TextSize = 10
         end
     end)
 
@@ -1445,7 +1441,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             flyToggleBtn.BorderColor3 = theme.success
             flyStatusLabel.Text = "✈️ Fly ativado (F para voar)"
             flyStatusLabel.TextColor3 = theme.success
-            flyStatusLabel.TextSize = 10 -- Mantém 10px
+            flyStatusLabel.TextSize = 10
         else
             flyModule:disable()
             flyToggleBtn.BackgroundColor3 = theme.danger
@@ -1455,7 +1451,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             flyToggleBtn.BorderColor3 = theme.danger
             flyStatusLabel.Text = "Pressione F para voar"
             flyStatusLabel.TextColor3 = theme.textMuted
-            flyStatusLabel.TextSize = 10 -- Mantém 10px
+            flyStatusLabel.TextSize = 10
         end
     end)
 
@@ -1552,8 +1548,8 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     updateFlySliderUI(flyModule.speed)
 
     print("=" .. string.rep("=", 50))
-    print("⚡ Speed Control Pro v2.8 - Textos em 10px")
-    print("🎨 Design Premium - Textos de status uniformes")
+    print("⚡ Speed Control Pro v2.8 - Títulos em 13px")
+    print("🎨 Design Premium - Títulos equilibrados")
     print("=" .. string.rep("=", 50))
 
     return gui
@@ -1564,7 +1560,7 @@ end
 -- ============================================
 
 print("=" .. string.rep("=", 50))
-print("⚡ Speed Control Pro v2.8 - Textos em 10px")
+print("⚡ Speed Control Pro v2.8 - Títulos em 13px")
 print("📋 Carregando módulos...")
 print("=" .. string.rep("=", 50) .. "\n")
 
