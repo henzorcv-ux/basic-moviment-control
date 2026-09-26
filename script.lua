@@ -1,19 +1,21 @@
 --[[
-    Speed Control Pro v2.8 - Voo com orientação pela câmera (Velocidade 1=60, +20 por nível)
+    Basic Moviments Control v3.3
+    Velocidade | Pulo | ESP | Noclip | Fly
+    ESP: Nome + Distância + Chams (com escala dinâmica)
+    Layout: ESP mais próximo do Pulo Infinito
 --]]
 
 -- ============================================
 -- SERVIÇOS E BIBLIOTECAS
 -- ============================================
 
-local Players, UIS, CoreGui, RunService, VirtualUser, TweenService, UserInputService = 
+local Players, UIS, CoreGui, RunService, VirtualUser, TweenService = 
     game:GetService("Players"), 
     game:GetService("UserInputService"), 
     game:GetService("CoreGui"), 
     game:GetService("RunService"), 
     game:GetService("VirtualUser"), 
-    game:GetService("TweenService"),
-    game:GetService("UserInputService")
+    game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
@@ -65,7 +67,7 @@ function ConfigManager.new()
     self.data = {
         speed = { value = 16, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
-        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false },
+        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false },
         window = { minimized = false }
     }
     return self
@@ -186,7 +188,6 @@ function SpeedModule:startSpeedProtection()
     end)
 
     if self.humanoid then
-        local originalHumanoid = self.humanoid
         local humanoidMetatable = {}
         humanoidMetatable.__index = function(table, key)
             return rawget(table, key)
@@ -282,7 +283,216 @@ function InfiniteJumpModule:setupJumpListener()
 end
 
 -- ============================================
--- MÓDULO DE NOCLIP (CORRIGIDO - SEM BUGS)
+-- MÓDULO DE ESP (Nome + Distância + Chams)
+-- COM ESCALA DINÂMICA
+-- ============================================
+
+local ESPModule = {}
+ESPModule.__index = ESPModule
+
+function ESPModule.new(config)
+    local self = setmetatable({}, ESPModule)
+    self.config = config
+    self.isEnabled = false
+    self.espObjects = {}
+    self.heartbeat = nil
+    self.connections = {}
+
+    self.scaleConfig = {
+        MIN_TEXT = 8,
+        MAX_TEXT = 13,
+        NEAR_DIST = 10,
+        FAR_DIST = 100,
+        MIN_WIDTH = 90,
+        MAX_WIDTH = 120,
+        MIN_HEIGHT = 14,
+        MAX_HEIGHT = 20,
+    }
+    return self
+end
+
+function ESPModule:createESPForPlayer(targetPlayer)
+    if targetPlayer == player then return end
+    if self.espObjects[targetPlayer] then return end
+
+    local character = targetPlayer.Character
+    if not character then return end
+
+    local head = character:FindFirstChild("Head")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not head or not rootPart then return end
+
+    -- ESP DE NOME
+    local nameGui = Instance.new("BillboardGui")
+    nameGui.Name = "ESP_Name"
+    nameGui.Size = UDim2.new(0, 120, 0, 20)
+    nameGui.StudsOffset = Vector3.new(0, 3.2, 0)
+    nameGui.AlwaysOnTop = true
+    nameGui.LightInfluence = 0
+    nameGui.Adornee = head
+    nameGui.Parent = head
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = targetPlayer.Name
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.TextSize = 13
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextScaled = false
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+    nameLabel.TextYAlignment = Enum.TextYAlignment.Center
+    nameLabel.Parent = nameGui
+
+    -- ESP DE DISTÂNCIA
+    local distGui = Instance.new("BillboardGui")
+    distGui.Name = "ESP_Distance"
+    distGui.Size = UDim2.new(0, 120, 0, 20)
+    distGui.StudsOffset = Vector3.new(0, -3.5, 0)
+    distGui.AlwaysOnTop = true
+    distGui.LightInfluence = 0
+    distGui.Adornee = rootPart
+    distGui.Parent = rootPart
+
+    local distLabel = Instance.new("TextLabel")
+    distLabel.Size = UDim2.new(1, 0, 1, 0)
+    distLabel.BackgroundTransparency = 1
+    distLabel.Text = "0m"
+    distLabel.TextColor3 = Color3.fromRGB(0, 230, 255)
+    distLabel.TextStrokeTransparency = 0
+    distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    distLabel.TextSize = 13
+    distLabel.Font = Enum.Font.GothamBold
+    distLabel.TextScaled = false
+    distLabel.TextXAlignment = Enum.TextXAlignment.Center
+    distLabel.TextYAlignment = Enum.TextYAlignment.Center
+    distLabel.Parent = distGui
+
+    -- ESP CHAMS
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESP_Chams"
+    highlight.Adornee = character
+    highlight.FillColor = Color3.fromRGB(255, 82, 82)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = character
+
+    self.espObjects[targetPlayer] = {
+        nameGui = nameGui,
+        nameLabel = nameLabel,
+        distGui = distGui,
+        distLabel = distLabel,
+        highlight = highlight
+    }
+
+    local charConn
+    charConn = targetPlayer.CharacterAdded:Connect(function(newChar)
+        task.wait(0.3)
+        self:removeESPForPlayer(targetPlayer)
+        if self.isEnabled then
+            self:createESPForPlayer(targetPlayer)
+        end
+    end)
+    table.insert(self.connections, charConn)
+end
+
+function ESPModule:removeESPForPlayer(targetPlayer)
+    local esp = self.espObjects[targetPlayer]
+    if not esp then return end
+
+    pcall(function() if esp.nameGui then esp.nameGui:Destroy() end end)
+    pcall(function() if esp.distGui then esp.distGui:Destroy() end end)
+    pcall(function() if esp.highlight then esp.highlight:Destroy() end end)
+
+    self.espObjects[targetPlayer] = nil
+end
+
+function ESPModule:updateDistances()
+    if not self.isEnabled then return end
+
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+
+    local cfg = self.scaleConfig
+
+    for targetPlayer, esp in pairs(self.espObjects) do
+        local character = targetPlayer.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+
+        if character and rootPart and esp.distLabel then
+            local distance = (camera.CFrame.Position - rootPart.Position).Magnitude
+            esp.distLabel.Text = string.format("%dm", math.floor(distance))
+
+            local factor = 1 - math.clamp((distance - cfg.NEAR_DIST) / (cfg.FAR_DIST - cfg.NEAR_DIST), 0, 1)
+            local newTextSize = math.floor(cfg.MIN_TEXT + (cfg.MAX_TEXT - cfg.MIN_TEXT) * factor + 0.5)
+            esp.nameLabel.TextSize = newTextSize
+            esp.distLabel.TextSize = newTextSize
+
+            local newWidth = math.floor(cfg.MIN_WIDTH + (cfg.MAX_WIDTH - cfg.MIN_WIDTH) * factor + 0.5)
+            local newHeight = math.floor(cfg.MIN_HEIGHT + (cfg.MAX_HEIGHT - cfg.MIN_HEIGHT) * factor + 0.5)
+            esp.nameGui.Size = UDim2.new(0, newWidth, 0, newHeight)
+            esp.distGui.Size = UDim2.new(0, newWidth, 0, newHeight)
+        end
+    end
+end
+
+function ESPModule:enable()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    self.config:set("features.esp", true)
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        self:createESPForPlayer(p)
+    end
+
+    local addedConn = Players.PlayerAdded:Connect(function(p)
+        task.wait(1)
+        if self.isEnabled then
+            self:createESPForPlayer(p)
+        end
+    end)
+    table.insert(self.connections, addedConn)
+
+    local removingConn = Players.PlayerRemoving:Connect(function(p)
+        self:removeESPForPlayer(p)
+    end)
+    table.insert(self.connections, removingConn)
+
+    self.heartbeat = RunService.RenderStepped:Connect(function()
+        self:updateDistances()
+    end)
+
+    print("👁️ ESP ATIVADO! (Nome + Distância + Chams)")
+end
+
+function ESPModule:disable()
+    self.isEnabled = false
+    self.config:set("features.esp", false)
+
+    for _, conn in ipairs(self.connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    self.connections = {}
+
+    if self.heartbeat then
+        self.heartbeat:Disconnect()
+        self.heartbeat = nil
+    end
+
+    for targetPlayer, _ in pairs(self.espObjects) do
+        self:removeESPForPlayer(targetPlayer)
+    end
+    self.espObjects = {}
+
+    print("👁️ ESP DESATIVADO! (Tudo removido)")
+end
+
+-- ============================================
+-- MÓDULO DE NOCLIP
 -- ============================================
 
 local NoclipModule = {}
@@ -360,7 +570,7 @@ function NoclipModule:setupNoclip()
 end
 
 -- ============================================
--- MÓDULO DE VOO (FLY) COM VELOCIDADE 1=60 E +20 POR NÍVEL
+-- MÓDULO DE VOO (FLY)
 -- ============================================
 
 local FlyModule = {}
@@ -379,7 +589,6 @@ function FlyModule.new(config)
     return self
 end
 
--- ALTERAÇÃO AQUI: Slider 1 = 60, cada +1 = +20
 function FlyModule:getRealSpeed()
     return 40 + (self.speed * 20)
 end
@@ -414,9 +623,9 @@ end
 
 function FlyModule:toggleFly()
     if not self.isEnabled then return end
-    
+
     self.isFlying = not self.isFlying
-    
+
     if self.isFlying then
         self:startFly()
         print("✈️ Voo ATIVADO (F) - Velocidade: " .. self:getRealSpeed())
@@ -431,7 +640,7 @@ function FlyModule:setupKeyToggle()
         self.fKeyConnection:Disconnect()
         self.fKeyConnection = nil
     end
-    
+
     self.fKeyConnection = UIS.InputBegan:Connect(function(input)
         if input.KeyCode == Enum.KeyCode.F and self.isEnabled then
             self:toggleFly()
@@ -441,13 +650,13 @@ end
 
 function FlyModule:startFly()
     if not self.isEnabled then return end
-    
+
     local character = player.Character
     if not character then return end
-    
+
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return end
-    
+
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if humanoid then
         humanoid.PlatformStand = true
@@ -465,40 +674,37 @@ function FlyModule:startFly()
         self.bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
         self.bodyGyro.Parent = rootPart
     end
-    
+
     if #self.connections == 0 then
         local flyConnection = RunService.RenderStepped:Connect(function()
             if not self.isFlying or not rootPart.Parent then 
                 if self.bodyVelocity then self.bodyVelocity.Velocity = Vector3.new(0, 0, 0) end
                 return 
             end
-            
+
             local moveDirection = Vector3.new(0, 0, 0)
-            
+
             if UIS:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + Vector3.new(0, 0, -1) end
             if UIS:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection + Vector3.new(0, 0, 1) end
             if UIS:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection + Vector3.new(-1, 0, 0) end
             if UIS:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + Vector3.new(1, 0, 0) end
-            
+
             if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDirection = moveDirection + Vector3.new(0, 1, 0) end
             if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then moveDirection = moveDirection + Vector3.new(0, -1, 0) end
-            
+
             if moveDirection.Magnitude > 0 then
                 moveDirection = moveDirection.Unit
             end
-            
+
             local camera = workspace.CurrentCamera
             if camera then
-                -- Obtém a direção da câmera
                 local forward = camera.CFrame.LookVector
                 local right = camera.CFrame.RightVector
                 local up = camera.CFrame.UpVector
-                
-                -- Calcula o movimento baseado na orientação da câmera
+
                 local moveVector = (forward * -moveDirection.Z) + (right * moveDirection.X) + (up * moveDirection.Y)
                 self.bodyVelocity.Velocity = moveVector * self:getRealSpeed()
-                
-                -- Define a orientação do personagem para a direção da câmera
+
                 local lookAtPosition = camera.CFrame.Position + (camera.CFrame.LookVector * 100)
                 local targetCFrame = CFrame.new(rootPart.Position, lookAtPosition)
                 self.bodyGyro.CFrame = targetCFrame
@@ -521,17 +727,17 @@ function FlyModule:cleanupFly()
         conn:Disconnect()
     end
     self.connections = {}
-    
+
     if self.bodyVelocity then
         self.bodyVelocity:Destroy()
         self.bodyVelocity = nil
     end
-    
+
     if self.bodyGyro then
         self.bodyGyro:Destroy()
         self.bodyGyro = nil
     end
-    
+
     local character = player.Character
     if character then
         local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -545,9 +751,9 @@ end
 -- DESIGN PREMIUM
 -- ============================================
 
-local function createUI(speedModule, jumpModule, noclipModule, flyModule)
+local function createUI(speedModule, jumpModule, espModule, noclipModule, flyModule)
     local gui = Instance.new("ScreenGui")
-    gui.Name, gui.Parent = "SpeedControlGUI", CoreGui
+    gui.Name, gui.Parent = "BasicMovimentsControlGUI", CoreGui
     gui.ResetOnSpawn, gui.IgnoreGuiInset = false, true
 
     -- ===== TEMA PREMIUM =====
@@ -565,21 +771,18 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
         border = Color3.fromRGB(55, 55, 72),
         shadow = Color3.fromRGB(0, 0, 0),
         accent = Color3.fromRGB(100, 180, 255),
-        accentDark = Color3.fromRGB(60, 130, 210),
         jumpColor = Color3.fromRGB(255, 100, 150),
-        jumpGlow = Color3.fromRGB(255, 50, 120),
         noclipColor = Color3.fromRGB(150, 100, 255),
-        noclipGlow = Color3.fromRGB(120, 50, 255),
         flyColor = Color3.fromRGB(0, 230, 255),
-        flyGlow = Color3.fromRGB(0, 180, 255),
+        espColor = Color3.fromRGB(200, 130, 255),
         gradient1 = Color3.fromRGB(100, 180, 255),
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== JANELA PRINCIPAL =====
+    -- ===== JANELA PRINCIPAL (565px) =====
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 260, 0, 480)
-    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -240)
+    mainFrame.Size = UDim2.new(0, 260, 0, 565)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -282)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 1
@@ -625,34 +828,34 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     gradient.Parent = header
 
     local titleIcon = Instance.new("TextLabel")
-    titleIcon.Size = UDim2.new(0, 24, 0, 24)
-    titleIcon.Position = UDim2.new(0, 10, 0.5, -12)
+    titleIcon.Size = UDim2.new(0, 26, 0, 26)
+    titleIcon.Position = UDim2.new(0, 10, 0.5, -13)
     titleIcon.BackgroundTransparency = 1
-    titleIcon.Text = "⚡"
+    titleIcon.Text = "⚙"
     titleIcon.TextColor3 = theme.text
-    titleIcon.TextSize = 18
+    titleIcon.TextSize = 20
     titleIcon.Font = Enum.Font.GothamBold
     titleIcon.TextXAlignment = Enum.TextXAlignment.Center
     titleIcon.TextYAlignment = Enum.TextYAlignment.Center
     titleIcon.Parent = header
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0.5, 0, 1, 0)
-    title.Position = UDim2.new(0, 38, 0, 0)
+    title.Size = UDim2.new(0.7, 0, 1, 0)
+    title.Position = UDim2.new(0, 42, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Speed Pro"
+    title.Text = "Basic Moviments Control ⚙"
     title.TextColor3 = theme.text
-    title.TextSize = 14
+    title.TextSize = 12
     title.Font = Enum.Font.GothamBold
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.TextYAlignment = Enum.TextYAlignment.Center
     title.Parent = header
 
     local subtitle = Instance.new("TextLabel")
-    subtitle.Size = UDim2.new(0.5, 0, 1, 0)
-    subtitle.Position = UDim2.new(0, 38, 0, 0)
+    subtitle.Size = UDim2.new(0.7, 0, 1, 0)
+    subtitle.Position = UDim2.new(0, 42, 0, 0)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Velocidade • Pulo • Noclip • Fly"
+    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Fly"
     subtitle.TextColor3 = theme.textSecondary
     subtitle.TextSize = 7
     subtitle.Font = Enum.Font.Gotham
@@ -687,9 +890,9 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     closeBtn.Position = UDim2.new(1, -24, 0.5, -11)
     closeBtn.BackgroundColor3 = theme.surface2
     closeBtn.BackgroundTransparency = 0.5
-    closeBtn.Text = "✕"
+    closeBtn.Text = "X"
     closeBtn.TextColor3 = theme.textSecondary
-    closeBtn.TextSize = 11
+    closeBtn.TextSize = 13
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.BorderSizePixel = 0
     closeBtn.Parent = headerButtons
@@ -697,6 +900,22 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 5)
     closeCorner.Parent = closeBtn
+
+    closeBtn.MouseEnter:Connect(function()
+        TweenService:Create(closeBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = theme.danger,
+            BackgroundTransparency = 0.3,
+            TextColor3 = Color3.fromRGB(255, 255, 255)
+        }):Play()
+    end)
+
+    closeBtn.MouseLeave:Connect(function()
+        TweenService:Create(closeBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = theme.surface2,
+            BackgroundTransparency = 0.5,
+            TextColor3 = theme.textSecondary
+        }):Play()
+    end)
 
     -- ===== CONTEÚDO =====
     local content = Instance.new("Frame")
@@ -706,10 +925,11 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     content.Parent = mainFrame
 
     -- ============================================
-    -- SEÇÃO VELOCIDADE
+    -- SEÇÃO VELOCIDADE (Y = 0)
     -- ============================================
     local speedSection = Instance.new("Frame")
     speedSection.Size = UDim2.new(1, 0, 0, 135)
+    speedSection.Position = UDim2.new(0, 0, 0, 0)
     speedSection.BackgroundTransparency = 1
     speedSection.Parent = content
 
@@ -866,7 +1086,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     toggleCorner.CornerRadius = UDim.new(0, 8)
     toggleCorner.Parent = speedToggleBtn
 
-    -- ===== DIVISOR 1 =====
+    -- ===== DIVISOR =====
     local divider1 = Instance.new("Frame")
     divider1.Size = UDim2.new(1, 0, 0, 1)
     divider1.Position = UDim2.new(0, 0, 0, 138)
@@ -876,10 +1096,10 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     divider1.Parent = content
 
     -- ============================================
-    -- SEÇÃO PULO
+    -- SEÇÃO PULO (Y = 143, altura 80)
     -- ============================================
     local jumpSection = Instance.new("Frame")
-    jumpSection.Size = UDim2.new(1, 0, 0, 95)
+    jumpSection.Size = UDim2.new(1, 0, 0, 80)
     jumpSection.Position = UDim2.new(0, 0, 0, 143)
     jumpSection.BackgroundTransparency = 1
     jumpSection.Parent = content
@@ -937,7 +1157,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local jumpStatusContainer = Instance.new("Frame")
     jumpStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 64)
+    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 60)
     jumpStatusContainer.BackgroundTransparency = 1
     jumpStatusContainer.Parent = jumpSection
 
@@ -953,11 +1173,88 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     jumpStatusLabel.Parent = jumpStatusContainer
 
     -- ============================================
-    -- SEÇÃO NOCLIP
+    -- SEÇÃO ESP (Y = 223) — mais próximo do Pulo
+    -- ============================================
+    local espSection = Instance.new("Frame")
+    espSection.Size = UDim2.new(1, 0, 0, 85)
+    espSection.Position = UDim2.new(0, 0, 0, 223)
+    espSection.BackgroundTransparency = 1
+    espSection.Parent = content
+
+    local espTitleContainer = Instance.new("Frame")
+    espTitleContainer.Size = UDim2.new(1, 0, 0, 22)
+    espTitleContainer.BackgroundTransparency = 1
+    espTitleContainer.Parent = espSection
+
+    local espTitleIcon = Instance.new("TextLabel")
+    espTitleIcon.Size = UDim2.new(0, 18, 1, 0)
+    espTitleIcon.BackgroundTransparency = 1
+    espTitleIcon.Text = "👁️"
+    espTitleIcon.TextColor3 = theme.espColor
+    espTitleIcon.TextSize = 14
+    espTitleIcon.Font = Enum.Font.GothamBold
+    espTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
+    espTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
+    espTitleIcon.Parent = espTitleContainer
+
+    local espTitle = Instance.new("TextLabel")
+    espTitle.Size = UDim2.new(1, -22, 1, 0)
+    espTitle.Position = UDim2.new(0, 22, 0, 0)
+    espTitle.BackgroundTransparency = 1
+    espTitle.Text = "ESP"
+    espTitle.TextColor3 = theme.textSecondary
+    espTitle.TextSize = 13
+    espTitle.Font = Enum.Font.GothamBold
+    espTitle.TextXAlignment = Enum.TextXAlignment.Left
+    espTitle.TextYAlignment = Enum.TextYAlignment.Center
+    espTitle.Parent = espTitleContainer
+
+    local espToggleContainer = Instance.new("Frame")
+    espToggleContainer.Size = UDim2.new(1, 0, 0, 36)
+    espToggleContainer.Position = UDim2.new(0, 0, 0, 24)
+    espToggleContainer.BackgroundTransparency = 1
+    espToggleContainer.Parent = espSection
+
+    local espToggleBtn = Instance.new("TextButton")
+    espToggleBtn.Size = UDim2.new(0, 96, 0, 32)
+    espToggleBtn.Position = UDim2.new(0.5, -48, 0.5, -16)
+    espToggleBtn.BackgroundColor3 = theme.danger
+    espToggleBtn.BackgroundTransparency = 0.2
+    espToggleBtn.Text = "OFF"
+    espToggleBtn.TextColor3 = theme.danger
+    espToggleBtn.TextSize = 14
+    espToggleBtn.Font = Enum.Font.GothamBold
+    espToggleBtn.BorderSizePixel = 2
+    espToggleBtn.BorderColor3 = theme.danger
+    espToggleBtn.Parent = espToggleContainer
+
+    local espBtnCorner = Instance.new("UICorner")
+    espBtnCorner.CornerRadius = UDim.new(0, 8)
+    espBtnCorner.Parent = espToggleBtn
+
+    local espStatusContainer = Instance.new("Frame")
+    espStatusContainer.Size = UDim2.new(1, 0, 0, 16)
+    espStatusContainer.Position = UDim2.new(0, 0, 0, 64)
+    espStatusContainer.BackgroundTransparency = 1
+    espStatusContainer.Parent = espSection
+
+    local espStatusLabel = Instance.new("TextLabel")
+    espStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+    espStatusLabel.BackgroundTransparency = 1
+    espStatusLabel.Text = "Nome • Distância • Chams"
+    espStatusLabel.TextColor3 = theme.textMuted
+    espStatusLabel.TextSize = 10
+    espStatusLabel.Font = Enum.Font.Gotham
+    espStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+    espStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
+    espStatusLabel.Parent = espStatusContainer
+
+    -- ============================================
+    -- SEÇÃO NOCLIP (Y = 308)
     -- ============================================
     local noclipSection = Instance.new("Frame")
     noclipSection.Size = UDim2.new(1, 0, 0, 85)
-    noclipSection.Position = UDim2.new(0, 0, 0, 210)
+    noclipSection.Position = UDim2.new(0, 0, 0, 308)
     noclipSection.BackgroundTransparency = 1
     noclipSection.Parent = content
 
@@ -1030,11 +1327,11 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     noclipStatusLabel.Parent = noclipStatusContainer
 
     -- ============================================
-    -- SEÇÃO VOO (FLY)
+    -- SEÇÃO FLY (Y = 393)
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 120)
-    flySection.Position = UDim2.new(0, 0, 0, 280)
+    flySection.Position = UDim2.new(0, 0, 0, 393)
     flySection.BackgroundTransparency = 1
     flySection.Parent = content
 
@@ -1193,7 +1490,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
 
     local flyStatusContainer = Instance.new("Frame")
     flyStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    flyStatusContainer.Position = UDim2.new(0, 0, 0, 122)
+    flyStatusContainer.Position = UDim2.new(0, 0, 0, 118)
     flyStatusContainer.BackgroundTransparency = 1
     flyStatusContainer.Parent = flySection
 
@@ -1389,7 +1686,6 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             jumpToggleBtn.BorderColor3 = theme.success
             jumpStatusLabel.Text = "✅ Pulo ativado"
             jumpStatusLabel.TextColor3 = theme.success
-            jumpStatusLabel.TextSize = 10
         else
             jumpModule:disable()
             jumpToggleBtn.BackgroundColor3 = theme.danger
@@ -1399,7 +1695,32 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             jumpToggleBtn.BorderColor3 = theme.danger
             jumpStatusLabel.Text = "Espaço para pular"
             jumpStatusLabel.TextColor3 = theme.textMuted
-            jumpStatusLabel.TextSize = 10
+        end
+    end)
+
+    local espIsActive = false
+
+    espToggleBtn.MouseButton1Click:Connect(function()
+        espIsActive = not espIsActive
+
+        if espIsActive then
+            espModule:enable()
+            espToggleBtn.BackgroundColor3 = theme.success
+            espToggleBtn.BackgroundTransparency = 0.15
+            espToggleBtn.Text = "ON"
+            espToggleBtn.TextColor3 = theme.success
+            espToggleBtn.BorderColor3 = theme.success
+            espStatusLabel.Text = "✅ ESP ativado"
+            espStatusLabel.TextColor3 = theme.success
+        else
+            espModule:disable()
+            espToggleBtn.BackgroundColor3 = theme.danger
+            espToggleBtn.BackgroundTransparency = 0.2
+            espToggleBtn.Text = "OFF"
+            espToggleBtn.TextColor3 = theme.danger
+            espToggleBtn.BorderColor3 = theme.danger
+            espStatusLabel.Text = "Nome • Distância • Chams"
+            espStatusLabel.TextColor3 = theme.textMuted
         end
     end)
 
@@ -1417,7 +1738,6 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             noclipToggleBtn.BorderColor3 = theme.success
             noclipStatusLabel.Text = "👻 Noclip ativado"
             noclipStatusLabel.TextColor3 = theme.success
-            noclipStatusLabel.TextSize = 10
         else
             noclipModule:disable()
             noclipToggleBtn.BackgroundColor3 = theme.danger
@@ -1427,7 +1747,6 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             noclipToggleBtn.BorderColor3 = theme.danger
             noclipStatusLabel.Text = "Atravesse paredes"
             noclipStatusLabel.TextColor3 = theme.textMuted
-            noclipStatusLabel.TextSize = 10
         end
     end)
 
@@ -1445,7 +1764,6 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             flyToggleBtn.BorderColor3 = theme.success
             flyStatusLabel.Text = "✈️ Fly ativado (F para voar)"
             flyStatusLabel.TextColor3 = theme.success
-            flyStatusLabel.TextSize = 10
         else
             flyModule:disable()
             flyToggleBtn.BackgroundColor3 = theme.danger
@@ -1455,7 +1773,6 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
             flyToggleBtn.BorderColor3 = theme.danger
             flyStatusLabel.Text = "Pressione F para voar"
             flyStatusLabel.TextColor3 = theme.textMuted
-            flyStatusLabel.TextSize = 10
         end
     end)
 
@@ -1463,7 +1780,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     -- SISTEMA DE MINIMIZAR
     -- ============================================
 
-    local isMinimized, fullSize = false, UDim2.new(0, 260, 0, 480)
+    local isMinimized, fullSize = false, UDim2.new(0, 260, 0, 565)
     local minimizedSize = UDim2.new(0, 260, 0, 48)
 
     local function minimizeWindow()
@@ -1480,7 +1797,7 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
         if not isMinimized then return end
         isMinimized = false
         content.Visible = true
-        subtitle.Text = "Velocidade • Pulo • Noclip • Fly"
+        subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Fly"
         TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = fullSize}):Play()
         minBtn.Text = "−"
         minBtn.TextColor3 = theme.textSecondary
@@ -1493,11 +1810,19 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
         if isMinimized then maximizeWindow() else minimizeWindow() end
     end)
 
+    -- ============================================
+    -- BOTÃO FECHAR
+    -- ============================================
+
     closeBtn.MouseButton1Click:Connect(function()
-        speedModule:disable()
-        jumpModule:disable()
-        noclipModule:disable()
-        flyModule:disable()
+        gui:SetAttribute("UserClosed", true)
+
+        pcall(function() speedModule:disable()  end)
+        pcall(function() jumpModule:disable()   end)
+        pcall(function() espModule:disable()    end)
+        pcall(function() noclipModule:disable() end)
+        pcall(function() flyModule:disable()    end)
+
         gui:Destroy()
     end)
 
@@ -1552,33 +1877,95 @@ local function createUI(speedModule, jumpModule, noclipModule, flyModule)
     updateFlySliderUI(flyModule.speed)
 
     print("=" .. string.rep("=", 50))
-    print("⚡ Speed Control Pro v2.8 - Voo com escala 1=60, +20 por nível")
-    print("🎨 Design Premium - Velocidade proporcional")
+    print("⚙ Basic Moviments Control v3.3")
+    print("🎨 ESP mais próximo do Pulo Infinito")
     print("=" .. string.rep("=", 50))
 
     return gui
 end
 
 -- ============================================
--- INICIALIZAÇÃO DO SISTEMA COMPLETO
+-- INICIALIZAÇÃO DO SISTEMA COMPLETO (BLINDADO)
 -- ============================================
 
 print("=" .. string.rep("=", 50))
-print("⚡ Speed Control Pro v2.8 - Voo com escala 1=60, +20 por nível")
+print("⚙ Basic Moviments Control v3.3")
 print("📋 Carregando módulos...")
-print("📊 Escala: 1=60, 2=80, 3=100 ... 10=240")
+print("📊 Escala Fly: 1=60, 2=80, 3=100 ... 10=240")
+print("👁️ ESP: Nome + Distância + Chams (com escala dinâmica)")
+print("📐 Layout: ESP mais próximo do Pulo Infinito")
+print("🔒 Modo blindado: só fecha ao clicar no X")
 print("=" .. string.rep("=", 50) .. "\n")
 
 local config = ConfigManager.new()
 local speedModule = SpeedModule.new(config)
 local jumpModule = InfiniteJumpModule.new(config)
+local espModule = ESPModule.new(config)
 local noclipModule = NoclipModule.new(config)
 local flyModule = FlyModule.new(config)
 
 speedModule:initialize()
 
-local gui = createUI(speedModule, jumpModule, noclipModule, flyModule)
+-- ============================================
+-- FUNÇÃO DE CRIAÇÃO BLINDADA
+-- ============================================
 
-while true do 
-    task.wait(1) 
+local gui = nil
+local closedByUser = false
+
+local function buildGUI()
+    local success, result = pcall(function()
+        return createUI(speedModule, jumpModule, espModule, noclipModule, flyModule)
+    end)
+
+    if success and result then
+        gui = result
+
+        gui.Destroying:Connect(function()
+            if gui:GetAttribute("UserClosed") then
+                closedByUser = true
+                print("❌ GUI fechada pelo usuário.")
+            end
+        end)
+
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = true
+
+        print("✅ GUI criada com sucesso!")
+        return true
+    else
+        warn("⚠️ Falha ao criar GUI: " .. tostring(result))
+        return false
+    end
+end
+
+buildGUI()
+
+-- ============================================
+-- WATCHDOG: RECRIA A GUI SE FOR DESTRUÍDA SEM O USUÁRIO PEDIR
+-- ============================================
+
+task.spawn(function()
+    while true do
+        task.wait(2)
+
+        if closedByUser then
+            print("🛑 Watchdog encerrado (usuário fechou a GUI).")
+            break
+        end
+
+        if not gui or not gui.Parent then
+            warn("🔄 GUI desapareceu! Recriando automaticamente...")
+            task.wait(0.5)
+            buildGUI()
+        end
+    end
+end)
+
+-- ============================================
+-- LOOP PRINCIPAL
+-- ============================================
+
+while true do
+    task.wait(1)
 end
