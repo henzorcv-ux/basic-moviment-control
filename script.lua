@@ -1,9 +1,10 @@
 --[[
-    Basic Moviments Control v3.5
-    Velocidade | Pulo | ESP | Noclip | Fly
+    Basic Moviments Control v3.8
+    Velocidade | Pulo | ESP | Noclip | Hitbox Expander | Fly
     ESP: Nome + Distância + Chams (com escala dinâmica)
-    Layout: 600px com espaço extra após FLY
-    NOVO: Painel ARRASTÁVEL + Sliders inicializados corretamente
+    Layout: 685px com espaço extra após FLY
+    NOVO v3.7: Painel ARRASTÁVEL + HITBOX EXPANDER (placeholder) + botão 👁/👁❌
+    NOVO v3.8: Sliders corrigidos (inicialização correta) + Minimizar/Fechar funcionais
 --]]
 
 -- ============================================
@@ -68,7 +69,7 @@ function ConfigManager.new()
     self.data = {
         speed = { value = 16, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
-        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false },
+        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false },
         window = { minimized = false }
     }
     return self
@@ -571,6 +572,46 @@ function NoclipModule:setupNoclip()
 end
 
 -- ============================================
+-- MÓDULO DE HITBOX EXPANDER (placeholder)
+-- ============================================
+
+local HitboxModule = {}
+HitboxModule.__index = HitboxModule
+
+function HitboxModule.new(config)
+    local self = setmetatable({}, HitboxModule)
+    self.config = config
+    self.isEnabled = false
+    self.isViewing = false
+    return self
+end
+
+function HitboxModule:enable()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    self.config:set("features.hitbox", true)
+    print("🎯 Hitbox Expander ATIVADO! (em breve)")
+    -- TODO: implementar lógica de expansão de hitbox
+end
+
+function HitboxModule:disable()
+    if not self.isEnabled then return end
+    self.isEnabled = false
+    self.config:set("features.hitbox", false)
+    print("🎯 Hitbox Expander DESATIVADO!")
+    -- TODO: reverter hitbox ao normal
+end
+
+function HitboxModule:setViewing(state)
+    self.isViewing = state
+    if state then
+        print("👁 Visualização do Hitbox ATIVADA")
+    else
+        print("👁❌ Visualização do Hitbox DESATIVADA")
+    end
+end
+
+-- ============================================
 -- MÓDULO DE VOO (FLY)
 -- ============================================
 
@@ -752,7 +793,7 @@ end
 -- DESIGN PREMIUM
 -- ============================================
 
-local function createUI(speedModule, jumpModule, espModule, noclipModule, flyModule)
+local function createUI(speedModule, jumpModule, espModule, noclipModule, hitboxModule, flyModule)
     local gui = Instance.new("ScreenGui")
     gui.Name, gui.Parent = "BasicMovimentsControlGUI", CoreGui
     gui.ResetOnSpawn, gui.IgnoreGuiInset = false, true
@@ -774,16 +815,17 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
         accent = Color3.fromRGB(100, 180, 255),
         jumpColor = Color3.fromRGB(255, 100, 150),
         noclipColor = Color3.fromRGB(150, 100, 255),
+        hitboxColor = Color3.fromRGB(255, 200, 80),
         flyColor = Color3.fromRGB(0, 230, 255),
         espColor = Color3.fromRGB(200, 130, 255),
         gradient1 = Color3.fromRGB(100, 180, 255),
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== JANELA PRINCIPAL (600px) =====
+    -- ===== JANELA PRINCIPAL (685px) =====
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 260, 0, 600)
-    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -300)
+    mainFrame.Size = UDim2.new(0, 260, 0, 685)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -342)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 1
@@ -904,7 +946,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     subtitle.Size = UDim2.new(0.7, 0, 1, 0)
     subtitle.Position = UDim2.new(0, 42, 0, 0)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Fly"
+    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Hitbox • Fly"
     subtitle.TextColor3 = theme.textSecondary
     subtitle.TextSize = 7
     subtitle.Font = Enum.Font.Gotham
@@ -1376,11 +1418,137 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     noclipStatusLabel.Parent = noclipStatusContainer
 
     -- ============================================
-    -- SEÇÃO FLY (Y = 393)
+    -- SEÇÃO HITBOX EXPANDER (Y = 393)
+    -- ============================================
+    local hitboxSection = Instance.new("Frame")
+    hitboxSection.Size = UDim2.new(1, 0, 0, 85)
+    hitboxSection.Position = UDim2.new(0, 0, 0, 393)
+    hitboxSection.BackgroundTransparency = 1
+    hitboxSection.Parent = content
+
+    local hitboxTitleContainer = Instance.new("Frame")
+    hitboxTitleContainer.Size = UDim2.new(1, 0, 0, 22)
+    hitboxTitleContainer.BackgroundTransparency = 1
+    hitboxTitleContainer.Parent = hitboxSection
+
+    local hitboxTitleIcon = Instance.new("TextLabel")
+    hitboxTitleIcon.Size = UDim2.new(0, 18, 1, 0)
+    hitboxTitleIcon.BackgroundTransparency = 1
+    hitboxTitleIcon.Text = "🎯"
+    hitboxTitleIcon.TextColor3 = theme.hitboxColor
+    hitboxTitleIcon.TextSize = 14
+    hitboxTitleIcon.Font = Enum.Font.GothamBold
+    hitboxTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
+    hitboxTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
+    hitboxTitleIcon.Parent = hitboxTitleContainer
+
+    local hitboxTitle = Instance.new("TextLabel")
+    hitboxTitle.Size = UDim2.new(1, -22, 1, 0)
+    hitboxTitle.Position = UDim2.new(0, 22, 0, 0)
+    hitboxTitle.BackgroundTransparency = 1
+    hitboxTitle.Text = "HITBOX EXPANDER"
+    hitboxTitle.TextColor3 = theme.textSecondary
+    hitboxTitle.TextSize = 13
+    hitboxTitle.Font = Enum.Font.GothamBold
+    hitboxTitle.TextXAlignment = Enum.TextXAlignment.Left
+    hitboxTitle.TextYAlignment = Enum.TextYAlignment.Center
+    hitboxTitle.Parent = hitboxTitleContainer
+
+    local hitboxToggleContainer = Instance.new("Frame")
+    hitboxToggleContainer.Size = UDim2.new(1, 0, 0, 36)
+    hitboxToggleContainer.Position = UDim2.new(0, 0, 0, 24)
+    hitboxToggleContainer.BackgroundTransparency = 1
+    hitboxToggleContainer.Parent = hitboxSection
+
+    local hitboxToggleBtn = Instance.new("TextButton")
+    hitboxToggleBtn.Size = UDim2.new(0, 96, 0, 32)
+    hitboxToggleBtn.Position = UDim2.new(0.5, -48, 0.5, -16)
+    hitboxToggleBtn.BackgroundColor3 = theme.danger
+    hitboxToggleBtn.BackgroundTransparency = 0.2
+    hitboxToggleBtn.Text = "OFF"
+    hitboxToggleBtn.TextColor3 = theme.danger
+    hitboxToggleBtn.TextSize = 14
+    hitboxToggleBtn.Font = Enum.Font.GothamBold
+    hitboxToggleBtn.BorderSizePixel = 2
+    hitboxToggleBtn.BorderColor3 = theme.danger
+    hitboxToggleBtn.Parent = hitboxToggleContainer
+
+    local hitboxBtnCorner = Instance.new("UICorner")
+    hitboxBtnCorner.CornerRadius = UDim.new(0, 8)
+    hitboxBtnCorner.Parent = hitboxToggleBtn
+
+    -- ============================================
+    -- BOTÃO DE VISUALIZAÇÃO (Olho / Olho com X)
+    -- ============================================
+    local hitboxViewBtn = Instance.new("TextButton")
+    hitboxViewBtn.Size = UDim2.new(0, 32, 0, 32)
+    hitboxViewBtn.Position = UDim2.new(0.5, 52, 0.5, -16)
+    hitboxViewBtn.BackgroundColor3 = theme.surface2
+    hitboxViewBtn.BackgroundTransparency = 0.3
+    hitboxViewBtn.Text = "👁"
+    hitboxViewBtn.TextColor3 = theme.textMuted
+    hitboxViewBtn.TextSize = 18
+    hitboxViewBtn.Font = Enum.Font.GothamBold
+    hitboxViewBtn.BorderSizePixel = 2
+    hitboxViewBtn.BorderColor3 = theme.danger
+    hitboxViewBtn.Parent = hitboxToggleContainer
+
+    local hitboxViewCorner = Instance.new("UICorner")
+    hitboxViewCorner.CornerRadius = UDim.new(0, 8)
+    hitboxViewCorner.Parent = hitboxViewBtn
+
+    -- X sobreposto (para o estado "olho com X")
+    local xOverlay1 = Instance.new("Frame")
+    xOverlay1.Size = UDim2.new(0, 22, 0, 2)
+    xOverlay1.Position = UDim2.new(0.5, -11, 0.5, -1)
+    xOverlay1.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
+    xOverlay1.BorderSizePixel = 0
+    xOverlay1.Rotation = 45
+    xOverlay1.ZIndex = 3
+    xOverlay1.Visible = true
+    xOverlay1.Parent = hitboxViewBtn
+
+    local xOverlay1Corner = Instance.new("UICorner")
+    xOverlay1Corner.CornerRadius = UDim.new(1, 0)
+    xOverlay1Corner.Parent = xOverlay1
+
+    local xOverlay2 = Instance.new("Frame")
+    xOverlay2.Size = UDim2.new(0, 22, 0, 2)
+    xOverlay2.Position = UDim2.new(0.5, -11, 0.5, -1)
+    xOverlay2.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
+    xOverlay2.BorderSizePixel = 0
+    xOverlay2.Rotation = -45
+    xOverlay2.ZIndex = 3
+    xOverlay2.Visible = true
+    xOverlay2.Parent = hitboxViewBtn
+
+    local xOverlay2Corner = Instance.new("UICorner")
+    xOverlay2Corner.CornerRadius = UDim.new(1, 0)
+    xOverlay2Corner.Parent = xOverlay2
+
+    local hitboxStatusContainer = Instance.new("Frame")
+    hitboxStatusContainer.Size = UDim2.new(1, 0, 0, 16)
+    hitboxStatusContainer.Position = UDim2.new(0, 0, 0, 64)
+    hitboxStatusContainer.BackgroundTransparency = 1
+    hitboxStatusContainer.Parent = hitboxSection
+
+    local hitboxStatusLabel = Instance.new("TextLabel")
+    hitboxStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+    hitboxStatusLabel.BackgroundTransparency = 1
+    hitboxStatusLabel.Text = "Expanda a hitbox dos jogadores"
+    hitboxStatusLabel.TextColor3 = theme.textMuted
+    hitboxStatusLabel.TextSize = 10
+    hitboxStatusLabel.Font = Enum.Font.Gotham
+    hitboxStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+    hitboxStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
+    hitboxStatusLabel.Parent = hitboxStatusContainer
+
+    -- ============================================
+    -- SEÇÃO FLY (Y = 478)
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 120)
-    flySection.Position = UDim2.new(0, 0, 0, 393)
+    flySection.Position = UDim2.new(0, 0, 0, 478)
     flySection.BackgroundTransparency = 1
     flySection.Parent = content
 
@@ -1559,9 +1727,25 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     -- ============================================
     local bottomSpacer = Instance.new("Frame")
     bottomSpacer.Size = UDim2.new(1, 0, 0, 35)
-    bottomSpacer.Position = UDim2.new(0, 0, 0, 518)
+    bottomSpacer.Position = UDim2.new(0, 0, 0, 603)
     bottomSpacer.BackgroundTransparency = 1
     bottomSpacer.Parent = content
+
+    -- ============================================
+    -- CORREÇÃO DOS SLIDERS (inicialização)
+    -- ============================================
+    -- O problema original: AbsoluteSize ainda era 0 quando updateSliderUI
+    -- era chamado, fazendo o botão começar fora da linha.
+    -- Solução: aguardar AbsoluteSize > 0 antes de posicionar.
+
+    local function waitForAbsoluteSize(element, callback)
+        task.spawn(function()
+            while element.AbsoluteSize.X <= 0 do
+                RunService.RenderStepped:Wait()
+            end
+            callback(element.AbsoluteSize.X)
+        end)
+    end
 
     -- ============================================
     -- LÓGICA DO SLIDER (VELOCIDADE PRINCIPAL)
@@ -1575,20 +1759,21 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
         return math.clamp((value - minValue) / (maxValue - minValue), 0, 1)
     end
 
-    local function updateSliderUI(value)
+    local function updateSliderUI(value, forcedContainerWidth)
         local percent = calculateSliderPosition(value)
-        local containerWidth = sliderContainer.AbsoluteSize.X
+        local containerWidth = forcedContainerWidth or sliderContainer.AbsoluteSize.X
+        if containerWidth <= 0 then return end
         local trackWidth = containerWidth - 64
         local buttonPos = percent * trackWidth
         sliderButton.Position = UDim2.new(0, 32 + buttonPos - 7, 0.5, -7)
         sliderFill.Size = UDim2.new(math.clamp(percent, 0, 1), 0, 1, 0)
     end
 
-    local function updateUI(speed)
+    local function updateUI(speed, forcedContainerWidth)
         speed = speed or currentValue
         currentValue = speed
         speedValue.Text = tostring(math.floor(speed))
-        updateSliderUI(speed)
+        updateSliderUI(speed, forcedContainerWidth)
     end
 
     local function updateSpeed(value)
@@ -1638,20 +1823,27 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
         end
     end)
 
+    -- Inicializa o slider de velocidade APÓS o AbsoluteSize estar pronto
+    waitForAbsoluteSize(sliderContainer, function(width)
+        updateUI(currentValue, width)
+    end)
+
     -- ============================================
     -- LÓGICA DO SLIDER DE VELOCIDADE DE VOO
     -- ============================================
 
     local flyMinVal, flyMaxVal = 1, 10
     local isFlyDragging = false
+    local currentFlyValue = flyModule.speed or 1
 
     local function calculateFlySliderPosition(value)
         return math.clamp((value - flyMinVal) / (flyMaxVal - flyMinVal), 0, 1)
     end
 
-    local function updateFlySliderUI(value)
+    local function updateFlySliderUI(value, forcedContainerWidth)
         local percent = calculateFlySliderPosition(value)
-        local containerWidth = flySliderContainer.AbsoluteSize.X
+        local containerWidth = forcedContainerWidth or flySliderContainer.AbsoluteSize.X
+        if containerWidth <= 0 then return end
         local trackWidth = containerWidth - 52
         local buttonPos = percent * trackWidth
         flySliderButton.Position = UDim2.new(0, 26 + buttonPos - 6, 0.5, -6)
@@ -1661,6 +1853,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
 
     local function updateFlySpeed(value)
         value = math.clamp(value, flyMinVal, flyMaxVal)
+        currentFlyValue = value
         flyModule:setSpeed(value)
         updateFlySliderUI(value)
     end
@@ -1703,6 +1896,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
             local newValue = flyMinVal + (flyMaxVal - flyMinVal) * percent
             updateFlySpeed(newValue)
         end
+    end)
+
+    -- Inicializa o slider de voo APÓS o AbsoluteSize estar pronto
+    waitForAbsoluteSize(flySliderContainer, function(width)
+        updateFlySliderUI(currentFlyValue, width)
     end)
 
     -- ============================================
@@ -1808,6 +2006,69 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
         end
     end)
 
+    local hitboxIsActive = false
+
+    hitboxToggleBtn.MouseButton1Click:Connect(function()
+        hitboxIsActive = not hitboxIsActive
+
+        if hitboxIsActive then
+            hitboxModule:enable()
+            hitboxToggleBtn.BackgroundColor3 = theme.success
+            hitboxToggleBtn.BackgroundTransparency = 0.15
+            hitboxToggleBtn.Text = "ON"
+            hitboxToggleBtn.TextColor3 = theme.success
+            hitboxToggleBtn.BorderColor3 = theme.success
+            hitboxStatusLabel.Text = "🎯 Hitbox Expander ativado"
+            hitboxStatusLabel.TextColor3 = theme.success
+        else
+            hitboxModule:disable()
+            hitboxToggleBtn.BackgroundColor3 = theme.danger
+            hitboxToggleBtn.BackgroundTransparency = 0.2
+            hitboxToggleBtn.Text = "OFF"
+            hitboxToggleBtn.TextColor3 = theme.danger
+            hitboxToggleBtn.BorderColor3 = theme.danger
+            hitboxStatusLabel.Text = "Expanda a hitbox dos jogadores"
+            hitboxStatusLabel.TextColor3 = theme.textMuted
+        end
+    end)
+
+    -- ============================================
+    -- LÓGICA DO BOTÃO DE VISUALIZAÇÃO (OLHO)
+    -- ============================================
+    local hitboxViewActive = false
+
+    hitboxViewBtn.MouseButton1Click:Connect(function()
+        hitboxViewActive = not hitboxViewActive
+
+        if hitboxViewActive then
+            hitboxViewBtn.Text = "👁"
+            hitboxViewBtn.TextColor3 = theme.hitboxColor
+            hitboxViewBtn.BorderColor3 = theme.hitboxColor
+            xOverlay1.Visible = false
+            xOverlay2.Visible = false
+            hitboxModule:setViewing(true)
+        else
+            hitboxViewBtn.Text = "👁"
+            hitboxViewBtn.TextColor3 = theme.textMuted
+            hitboxViewBtn.BorderColor3 = theme.danger
+            xOverlay1.Visible = true
+            xOverlay2.Visible = true
+            hitboxModule:setViewing(false)
+        end
+    end)
+
+    hitboxViewBtn.MouseEnter:Connect(function()
+        TweenService:Create(hitboxViewBtn, TweenInfo.new(0.15), {
+            BackgroundTransparency = 0.1
+        }):Play()
+    end)
+
+    hitboxViewBtn.MouseLeave:Connect(function()
+        TweenService:Create(hitboxViewBtn, TweenInfo.new(0.15), {
+            BackgroundTransparency = 0.3
+        }):Play()
+    end)
+
     local flyIsActive = false
 
     flyToggleBtn.MouseButton1Click:Connect(function()
@@ -1835,11 +2096,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     end)
 
     -- ============================================
-    -- SISTEMA DE MINIMIZAR (600px)
+    -- SISTEMA DE MINIMIZAR / FECHAR
     -- ============================================
 
     local isMinimized = false
-    local fullSize = UDim2.new(0, 260, 0, 600)
+    local fullSize = UDim2.new(0, 260, 0, 685)
     local minimizedSize = UDim2.new(0, 260, 0, 48)
 
     local function minimizeWindow()
@@ -1856,23 +2117,36 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
         if not isMinimized then return end
         isMinimized = false
         content.Visible = true
-        subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Fly"
+        subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Hitbox • Fly"
         TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = fullSize}):Play()
         minBtn.Text = "−"
         minBtn.TextColor3 = theme.textSecondary
-        task.wait(0.4)
-        updateSliderUI(currentValue)
-        updateFlySliderUI(flyModule.speed)
+        task.wait(0.45)
+        updateUI(currentValue)
+        updateFlySliderUI(currentFlyValue)
     end
 
     minBtn.MouseButton1Click:Connect(function()
         if isMinimized then maximizeWindow() else minimizeWindow() end
     end)
 
-    -- ============================================
-    -- BOTÃO FECHAR
-    -- ============================================
+    minBtn.MouseEnter:Connect(function()
+        TweenService:Create(minBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = theme.surface3,
+            BackgroundTransparency = 0.3,
+            TextColor3 = theme.text
+        }):Play()
+    end)
 
+    minBtn.MouseLeave:Connect(function()
+        TweenService:Create(minBtn, TweenInfo.new(0.2), {
+            BackgroundColor3 = theme.surface2,
+            BackgroundTransparency = 0.5,
+            TextColor3 = theme.textSecondary
+        }):Play()
+    end)
+
+    -- Botão fechar
     closeBtn.MouseButton1Click:Connect(function()
         gui:SetAttribute("UserClosed", true)
 
@@ -1880,20 +2154,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
         pcall(function() jumpModule:disable()   end)
         pcall(function() espModule:disable()    end)
         pcall(function() noclipModule:disable() end)
+        pcall(function() hitboxModule:disable() end)
         pcall(function() flyModule:disable()    end)
 
-        gui:Destroy()
+        pcall(function() gui:Destroy() end)
     end)
-
-    -- ============================================
-    -- INICIALIZAÇÃO DOS SLIDERS (CORREÇÃO)
-    -- ============================================
-    -- Aguarda o AbsoluteSize dos containers ser calculado pelo Roblox
-    -- e então posiciona os botões dos sliders no lugar correto.
-    task.wait(0.1)
-    updateUI(currentValue)                    -- Inicializa slider de velocidade
-    updateFlySliderUI(flyModule.speed)        -- Inicializa slider de fly
-
 end
 
 -- ============================================
@@ -1905,13 +2170,12 @@ local speedModule = SpeedModule.new(config)
 local jumpModule = InfiniteJumpModule.new(config)
 local espModule = ESPModule.new(config)
 local noclipModule = NoclipModule.new(config)
+local hitboxModule = HitboxModule.new(config)
 local flyModule = FlyModule.new(config)
 
 speedModule:initialize()
+createUI(speedModule, jumpModule, espModule, noclipModule, hitboxModule, flyModule)
 
-createUI(speedModule, jumpModule, espModule, noclipModule, flyModule)
-
-print("✅ Basic Moviments Control v3.5 carregado com sucesso!")
-print("📐 Painel: 600px de altura com espaço extra após FLY")
-print("🖱️ Painel ARRASTÁVEL: clique e segure no cabeçalho para mover")
-print("🎚️ Sliders inicializados corretamente (sem ficar fora da linha)")
+print("✅ Basic Moviments Control v3.8 carregado com sucesso!")
+print("🎯 Hitbox Expander + 👁 botão de visualização")
+print("📐 Sliders corrigidos + Minimizar/Fechar funcionais")
