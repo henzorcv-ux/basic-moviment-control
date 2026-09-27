@@ -1,10 +1,11 @@
 --[[
-    Basic Moviments Control v3.8
+    Basic Moviments Control v3.9
     Velocidade | Pulo | ESP | Noclip | Hitbox Expander | Fly
     ESP: Nome + Distância + Chams (com escala dinâmica)
     Layout: 685px com espaço extra após FLY
     NOVO v3.7: Painel ARRASTÁVEL + HITBOX EXPANDER (placeholder) + botão 👁/👁❌
-    NOVO v3.8: Sliders corrigidos (inicialização correta) + Minimizar/Fechar funcionais
+    NOVO v3.8: Sliders corrigidos + Minimizar/Fechar funcionais
+    NOVO v3.9: Hitbox Expander FUNCIONAL + botão de visualização controla visibilidade
 --]]
 
 -- ============================================
@@ -324,7 +325,6 @@ function ESPModule:createESPForPlayer(targetPlayer)
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not head or not rootPart then return end
 
-    -- ESP DE NOME
     local nameGui = Instance.new("BillboardGui")
     nameGui.Name = "ESP_Name"
     nameGui.Size = UDim2.new(0, 120, 0, 20)
@@ -348,7 +348,6 @@ function ESPModule:createESPForPlayer(targetPlayer)
     nameLabel.TextYAlignment = Enum.TextYAlignment.Center
     nameLabel.Parent = nameGui
 
-    -- ESP DE DISTÂNCIA
     local distGui = Instance.new("BillboardGui")
     distGui.Name = "ESP_Distance"
     distGui.Size = UDim2.new(0, 120, 0, 20)
@@ -372,7 +371,6 @@ function ESPModule:createESPForPlayer(targetPlayer)
     distLabel.TextYAlignment = Enum.TextYAlignment.Center
     distLabel.Parent = distGui
 
-    -- ESP CHAMS
     local highlight = Instance.new("Highlight")
     highlight.Name = "ESP_Chams"
     highlight.Adornee = character
@@ -572,7 +570,16 @@ function NoclipModule:setupNoclip()
 end
 
 -- ============================================
--- MÓDULO DE HITBOX EXPANDER (placeholder)
+-- MÓDULO DE HITBOX EXPANDER (FUNCIONAL)
+-- ============================================
+-- Baseado no 1º script:
+--   - Expande o HumanoidRootPart de outros jogadores
+--   - Mantém .Touched, GetPartsInPart, raycast, ferramentas, dano, empurrão
+--   - NÃO mexe em Massless / CanCollide / CustomPhysicalProperties (não congela)
+--   - Botão de visualização (👁) controla se a hitbox fica visível ou invisível
+--     * Visualização ON  -> hitbox grande E visível (Transparency = 0.7)
+--     * Visualização OFF -> hitbox grande MAS invisível (Transparency = 1)
+--   - Ao desativar o Hitbox: hitbox volta ao tamanho padrão e volta a ser invisível
 -- ============================================
 
 local HitboxModule = {}
@@ -583,31 +590,139 @@ function HitboxModule.new(config)
     self.config = config
     self.isEnabled = false
     self.isViewing = false
+    self.connection = nil
+    self.originalSizes = {}
+
+    -- Configurações
+    self.HITBOX_SIZE = Vector3.new(120, 120, 120)     -- tamanho expandido
+    self.DEFAULT_SIZE = Vector3.new(2, 2, 1)       -- tamanho padrão do HRP
+    self.VISIBLE_TRANSPARENCY = 0.7                -- quando visualização ON
+    self.INVISIBLE_TRANSPARENCY = 1                -- quando visualização OFF
+
     return self
+end
+
+function HitboxModule:_getHRP(character)
+    if not character then return nil end
+    return character:FindFirstChild("HumanoidRootPart")
+end
+
+function HitboxModule:_expandHitbox(character)
+    local hrp = self:_getHRP(character)
+    if not hrp then return end
+
+    -- Salva o tamanho original (uma vez só)
+    if not self.originalSizes[character] then
+        self.originalSizes[character] = hrp.Size
+    end
+
+    -- ⬇️ ESSENCIAL: expandir o HumanoidRootPart de verdade
+    -- Isso mantém TODAS as detecções funcionando:
+    -- .Touched, GetPartsInPart, raycast, ferramentas, dano, empurrão
+    hrp.Size = self.HITBOX_SIZE
+
+    -- Visibilidade depende do estado do botão 👁
+    if self.isViewing then
+        hrp.Transparency = self.VISIBLE_TRANSPARENCY
+    else
+        hrp.Transparency = self.INVISIBLE_TRANSPARENCY
+    end
+
+    -- ⚠️ NÃO MEXER em Massless / CanCollide / CustomPhysicalProperties
+    -- Essas linhas eram o que CONGELAVA o movimento no 1º script.
+end
+
+function HitboxModule:_restoreHitbox(character)
+    local hrp = self:_getHRP(character)
+    if not hrp then return end
+
+    if self.originalSizes[character] then
+        hrp.Size = self.originalSizes[character]
+        self.originalSizes[character] = nil
+    else
+        hrp.Size = self.DEFAULT_SIZE
+    end
+
+    hrp.Transparency = 1
+end
+
+function HitboxModule:_applyToAll()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            self:_expandHitbox(p.Character)
+        end
+    end
+end
+
+function HitboxModule:_restoreAll()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then
+            self:_restoreHitbox(p.Character)
+        end
+    end
+    self.originalSizes = {}
 end
 
 function HitboxModule:enable()
     if self.isEnabled then return end
     self.isEnabled = true
     self.config:set("features.hitbox", true)
-    print("🎯 Hitbox Expander ATIVADO! (em breve)")
-    -- TODO: implementar lógica de expansão de hitbox
+
+    self:_applyToAll()
+
+    -- Loop para pegar novos players e respawns
+    self.connection = RunService.Heartbeat:Connect(function()
+        if not self.isEnabled then return end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp.Size ~= self.HITBOX_SIZE then
+                    self:_expandHitbox(p.Character)
+                end
+            end
+        end
+    end)
+
+    print("🎯 Hitbox Expander ATIVADO! (tamanho: " .. tostring(self.HITBOX_SIZE) .. ")")
 end
 
 function HitboxModule:disable()
     if not self.isEnabled then return end
     self.isEnabled = false
     self.config:set("features.hitbox", false)
-    print("🎯 Hitbox Expander DESATIVADO!")
-    -- TODO: reverter hitbox ao normal
+
+    if self.connection then
+        self.connection:Disconnect()
+        self.connection = nil
+    end
+
+    self:_restoreAll()
+    print("🎯 Hitbox Expander DESATIVADO! (tamanho restaurado)")
 end
 
 function HitboxModule:setViewing(state)
     self.isViewing = state
+
+    -- Aplica a visibilidade em todas as hitboxes já expandidas
+    if self.isEnabled then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if state then
+                        hrp.Transparency = self.VISIBLE_TRANSPARENCY
+                    else
+                        hrp.Transparency = self.INVISIBLE_TRANSPARENCY
+                    end
+                end
+            end
+        end
+    end
+
     if state then
-        print("👁 Visualização do Hitbox ATIVADA")
+        print("👁 Visualização do Hitbox ATIVADA (hitbox visível)")
     else
-        print("👁❌ Visualização do Hitbox DESATIVADA")
+        print("👁❌ Visualização do Hitbox DESATIVADA (hitbox invisível)")
     end
 end
 
@@ -798,7 +913,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     gui.Name, gui.Parent = "BasicMovimentsControlGUI", CoreGui
     gui.ResetOnSpawn, gui.IgnoreGuiInset = false, true
 
-    -- ===== TEMA PREMIUM =====
     local theme = {
         background = Color3.fromRGB(18, 18, 24),
         surface = Color3.fromRGB(28, 28, 38),
@@ -822,7 +936,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== JANELA PRINCIPAL (685px) =====
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 260, 0, 685)
     mainFrame.Position = UDim2.new(0.5, -130, 0.5, -342)
@@ -870,9 +983,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     gradient.Rotation = 45
     gradient.Parent = header
 
-    -- ============================================
-    -- SISTEMA DE DRAG (ARRASTAR PAINEL)
-    -- ============================================
     local dragging = false
     local dragInput = nil
     local dragStart = nil
@@ -915,8 +1025,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
             updateDrag(input)
         end
     end)
-
-    -- ============================================
 
     local titleIcon = Instance.new("TextLabel")
     titleIcon.Size = UDim2.new(0, 26, 0, 26)
@@ -1008,7 +1116,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
         }):Play()
     end)
 
-    -- ===== CONTEÚDO =====
     local content = Instance.new("Frame")
     content.Size = UDim2.new(1, -24, 1, -64)
     content.Position = UDim2.new(0, 12, 0, 56)
@@ -1016,7 +1123,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     content.Parent = mainFrame
 
     -- ============================================
-    -- SEÇÃO VELOCIDADE (Y = 0)
+    -- SEÇÃO VELOCIDADE
     -- ============================================
     local speedSection = Instance.new("Frame")
     speedSection.Size = UDim2.new(1, 0, 0, 135)
@@ -1177,7 +1284,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     toggleCorner.CornerRadius = UDim.new(0, 8)
     toggleCorner.Parent = speedToggleBtn
 
-    -- ===== DIVISOR =====
     local divider1 = Instance.new("Frame")
     divider1.Size = UDim2.new(1, 0, 0, 1)
     divider1.Position = UDim2.new(0, 0, 0, 138)
@@ -1187,7 +1293,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     divider1.Parent = content
 
     -- ============================================
-    -- SEÇÃO PULO (Y = 143, altura 80)
+    -- SEÇÃO PULO
     -- ============================================
     local jumpSection = Instance.new("Frame")
     jumpSection.Size = UDim2.new(1, 0, 0, 80)
@@ -1264,7 +1370,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     jumpStatusLabel.Parent = jumpStatusContainer
 
     -- ============================================
-    -- SEÇÃO ESP (Y = 223)
+    -- SEÇÃO ESP
     -- ============================================
     local espSection = Instance.new("Frame")
     espSection.Size = UDim2.new(1, 0, 0, 85)
@@ -1341,7 +1447,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     espStatusLabel.Parent = espStatusContainer
 
     -- ============================================
-    -- SEÇÃO NOCLIP (Y = 308)
+    -- SEÇÃO NOCLIP
     -- ============================================
     local noclipSection = Instance.new("Frame")
     noclipSection.Size = UDim2.new(1, 0, 0, 85)
@@ -1477,9 +1583,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     hitboxBtnCorner.CornerRadius = UDim.new(0, 8)
     hitboxBtnCorner.Parent = hitboxToggleBtn
 
-    -- ============================================
-    -- BOTÃO DE VISUALIZAÇÃO (Olho / Olho com X)
-    -- ============================================
     local hitboxViewBtn = Instance.new("TextButton")
     hitboxViewBtn.Size = UDim2.new(0, 32, 0, 32)
     hitboxViewBtn.Position = UDim2.new(0.5, 52, 0.5, -16)
@@ -1497,7 +1600,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     hitboxViewCorner.CornerRadius = UDim.new(0, 8)
     hitboxViewCorner.Parent = hitboxViewBtn
 
-    -- X sobreposto (para o estado "olho com X")
     local xOverlay1 = Instance.new("Frame")
     xOverlay1.Size = UDim2.new(0, 22, 0, 2)
     xOverlay1.Position = UDim2.new(0.5, -11, 0.5, -1)
@@ -1723,7 +1825,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     flyStatusLabel.Parent = flyStatusContainer
 
     -- ============================================
-    -- ESPAÇO EXTRA APÓS A SEÇÃO FLY
+    -- ESPAÇO EXTRA
     -- ============================================
     local bottomSpacer = Instance.new("Frame")
     bottomSpacer.Size = UDim2.new(1, 0, 0, 35)
@@ -1732,12 +1834,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     bottomSpacer.Parent = content
 
     -- ============================================
-    -- CORREÇÃO DOS SLIDERS (inicialização)
+    -- CORREÇÃO DOS SLIDERS
     -- ============================================
-    -- O problema original: AbsoluteSize ainda era 0 quando updateSliderUI
-    -- era chamado, fazendo o botão começar fora da linha.
-    -- Solução: aguardar AbsoluteSize > 0 antes de posicionar.
-
     local function waitForAbsoluteSize(element, callback)
         task.spawn(function()
             while element.AbsoluteSize.X <= 0 do
@@ -1746,10 +1844,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
             callback(element.AbsoluteSize.X)
         end)
     end
-
-    -- ============================================
-    -- LÓGICA DO SLIDER (VELOCIDADE PRINCIPAL)
-    -- ============================================
 
     local isDragging, minValue, maxValue = false, 5, 500
     local currentValue = speedModule.currentSpeed or 16
@@ -1823,15 +1917,13 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
         end
     end)
 
-    -- Inicializa o slider de velocidade APÓS o AbsoluteSize estar pronto
     waitForAbsoluteSize(sliderContainer, function(width)
         updateUI(currentValue, width)
     end)
 
     -- ============================================
-    -- LÓGICA DO SLIDER DE VELOCIDADE DE VOO
+    -- SLIDER DE VOO
     -- ============================================
-
     local flyMinVal, flyMaxVal = 1, 10
     local isFlyDragging = false
     local currentFlyValue = flyModule.speed or 1
@@ -1898,13 +1990,12 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
         end
     end)
 
-    -- Inicializa o slider de voo APÓS o AbsoluteSize estar pronto
     waitForAbsoluteSize(flySliderContainer, function(width)
         updateFlySliderUI(currentFlyValue, width)
     end)
 
     -- ============================================
-    -- LÓGICA DOS TOGGLES
+    -- TOGGLES
     -- ============================================
 
     speedToggleBtn.MouseButton1Click:Connect(function()
@@ -2032,9 +2123,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
         end
     end)
 
-    -- ============================================
-    -- LÓGICA DO BOTÃO DE VISUALIZAÇÃO (OLHO)
-    -- ============================================
     local hitboxViewActive = false
 
     hitboxViewBtn.MouseButton1Click:Connect(function()
@@ -2096,7 +2184,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     end)
 
     -- ============================================
-    -- SISTEMA DE MINIMIZAR / FECHAR
+    -- MINIMIZAR / FECHAR
     -- ============================================
 
     local isMinimized = false
@@ -2146,7 +2234,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
         }):Play()
     end)
 
-    -- Botão fechar
     closeBtn.MouseButton1Click:Connect(function()
         gui:SetAttribute("UserClosed", true)
 
@@ -2176,6 +2263,6 @@ local flyModule = FlyModule.new(config)
 speedModule:initialize()
 createUI(speedModule, jumpModule, espModule, noclipModule, hitboxModule, flyModule)
 
-print("✅ Basic Moviments Control v3.8 carregado com sucesso!")
-print("🎯 Hitbox Expander + 👁 botão de visualização")
+print("✅ Basic Moviments Control v3.9 carregado com sucesso!")
+print("🎯 Hitbox Expander FUNCIONAL + 👁 botão de visualização")
 print("📐 Sliders corrigidos + Minimizar/Fechar funcionais")
