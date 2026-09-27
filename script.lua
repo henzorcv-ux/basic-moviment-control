@@ -1,8 +1,9 @@
 --[[
-    Basic Moviments Control v3.3
+    Basic Moviments Control v3.5
     Velocidade | Pulo | ESP | Noclip | Fly
     ESP: Nome + Distância + Chams (com escala dinâmica)
-    Layout: ESP mais próximo do Pulo Infinito
+    Layout: 600px com espaço extra após FLY
+    NOVO: Painel ARRASTÁVEL + Sliders inicializados corretamente
 --]]
 
 -- ============================================
@@ -779,10 +780,10 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== JANELA PRINCIPAL (565px) =====
+    -- ===== JANELA PRINCIPAL (600px) =====
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 260, 0, 565)
-    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -282)
+    mainFrame.Size = UDim2.new(0, 260, 0, 600)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -300)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 1
@@ -826,6 +827,54 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     })
     gradient.Rotation = 45
     gradient.Parent = header
+
+    -- ============================================
+    -- SISTEMA DE DRAG (ARRASTAR PAINEL)
+    -- ============================================
+    local dragging = false
+    local dragInput = nil
+    local dragStart = nil
+    local startPos = nil
+
+    local function updateDrag(input)
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+
+    header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    header.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement 
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            updateDrag(input)
+        end
+    end)
+
+    -- ============================================
 
     local titleIcon = Instance.new("TextLabel")
     titleIcon.Size = UDim2.new(0, 26, 0, 26)
@@ -1173,7 +1222,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     jumpStatusLabel.Parent = jumpStatusContainer
 
     -- ============================================
-    -- SEÇÃO ESP (Y = 223) — mais próximo do Pulo
+    -- SEÇÃO ESP (Y = 223)
     -- ============================================
     local espSection = Instance.new("Frame")
     espSection.Size = UDim2.new(1, 0, 0, 85)
@@ -1506,6 +1555,15 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     flyStatusLabel.Parent = flyStatusContainer
 
     -- ============================================
+    -- ESPAÇO EXTRA APÓS A SEÇÃO FLY
+    -- ============================================
+    local bottomSpacer = Instance.new("Frame")
+    bottomSpacer.Size = UDim2.new(1, 0, 0, 35)
+    bottomSpacer.Position = UDim2.new(0, 0, 0, 518)
+    bottomSpacer.BackgroundTransparency = 1
+    bottomSpacer.Parent = content
+
+    -- ============================================
     -- LÓGICA DO SLIDER (VELOCIDADE PRINCIPAL)
     -- ============================================
 
@@ -1777,10 +1835,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     end)
 
     -- ============================================
-    -- SISTEMA DE MINIMIZAR
+    -- SISTEMA DE MINIMIZAR (600px)
     -- ============================================
 
-    local isMinimized, fullSize = false, UDim2.new(0, 260, 0, 565)
+    local isMinimized = false
+    local fullSize = UDim2.new(0, 260, 0, 600)
     local minimizedSize = UDim2.new(0, 260, 0, 48)
 
     local function minimizeWindow()
@@ -1827,75 +1886,19 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, flyMod
     end)
 
     -- ============================================
-    -- SISTEMA DE ARRASTAR
+    -- INICIALIZAÇÃO DOS SLIDERS (CORREÇÃO)
     -- ============================================
+    -- Aguarda o AbsoluteSize dos containers ser calculado pelo Roblox
+    -- e então posiciona os botões dos sliders no lugar correto.
+    task.wait(0.1)
+    updateUI(currentValue)                    -- Inicializa slider de velocidade
+    updateFlySliderUI(flyModule.speed)        -- Inicializa slider de fly
 
-    local isDraggingWindow, dragStartPos, frameStartPos = false, nil, nil
-
-    header.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            isDraggingWindow, dragStartPos, frameStartPos = true, input.Position, mainFrame.Position
-        end
-    end)
-
-    header.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then 
-            isDraggingWindow = false 
-        end
-    end)
-
-    UIS.InputChanged:Connect(function(input)
-        if isDraggingWindow and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStartPos
-            mainFrame.Position = UDim2.new(
-                frameStartPos.X.Scale, 
-                frameStartPos.X.Offset + delta.X, 
-                frameStartPos.Y.Scale, 
-                frameStartPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-
-    -- ============================================
-    -- ATUALIZAÇÃO CONTÍNUA
-    -- ============================================
-
-    RunService.Heartbeat:Connect(function()
-        if not isDragging then
-            updateSliderUI(currentValue)
-        end
-        if not isFlyDragging then
-            updateFlySliderUI(flyModule.speed)
-        end
-    end)
-
-    -- ============================================
-    -- INICIALIZAÇÃO
-    -- ============================================
-
-    updateUI(speedModule.currentSpeed)
-    updateFlySliderUI(flyModule.speed)
-
-    print("=" .. string.rep("=", 50))
-    print("⚙ Basic Moviments Control v3.3")
-    print("🎨 ESP mais próximo do Pulo Infinito")
-    print("=" .. string.rep("=", 50))
-
-    return gui
 end
 
 -- ============================================
--- INICIALIZAÇÃO DO SISTEMA COMPLETO (BLINDADO)
+-- INICIALIZAÇÃO
 -- ============================================
-
-print("=" .. string.rep("=", 50))
-print("⚙ Basic Moviments Control v3.3")
-print("📋 Carregando módulos...")
-print("📊 Escala Fly: 1=60, 2=80, 3=100 ... 10=240")
-print("👁️ ESP: Nome + Distância + Chams (com escala dinâmica)")
-print("📐 Layout: ESP mais próximo do Pulo Infinito")
-print("🔒 Modo blindado: só fecha ao clicar no X")
-print("=" .. string.rep("=", 50) .. "\n")
 
 local config = ConfigManager.new()
 local speedModule = SpeedModule.new(config)
@@ -1906,66 +1909,9 @@ local flyModule = FlyModule.new(config)
 
 speedModule:initialize()
 
--- ============================================
--- FUNÇÃO DE CRIAÇÃO BLINDADA
--- ============================================
+createUI(speedModule, jumpModule, espModule, noclipModule, flyModule)
 
-local gui = nil
-local closedByUser = false
-
-local function buildGUI()
-    local success, result = pcall(function()
-        return createUI(speedModule, jumpModule, espModule, noclipModule, flyModule)
-    end)
-
-    if success and result then
-        gui = result
-
-        gui.Destroying:Connect(function()
-            if gui:GetAttribute("UserClosed") then
-                closedByUser = true
-                print("❌ GUI fechada pelo usuário.")
-            end
-        end)
-
-        gui.ResetOnSpawn = false
-        gui.IgnoreGuiInset = true
-
-        print("✅ GUI criada com sucesso!")
-        return true
-    else
-        warn("⚠️ Falha ao criar GUI: " .. tostring(result))
-        return false
-    end
-end
-
-buildGUI()
-
--- ============================================
--- WATCHDOG: RECRIA A GUI SE FOR DESTRUÍDA SEM O USUÁRIO PEDIR
--- ============================================
-
-task.spawn(function()
-    while true do
-        task.wait(2)
-
-        if closedByUser then
-            print("🛑 Watchdog encerrado (usuário fechou a GUI).")
-            break
-        end
-
-        if not gui or not gui.Parent then
-            warn("🔄 GUI desapareceu! Recriando automaticamente...")
-            task.wait(0.5)
-            buildGUI()
-        end
-    end
-end)
-
--- ============================================
--- LOOP PRINCIPAL
--- ============================================
-
-while true do
-    task.wait(1)
-end
+print("✅ Basic Moviments Control v3.5 carregado com sucesso!")
+print("📐 Painel: 600px de altura com espaço extra após FLY")
+print("🖱️ Painel ARRASTÁVEL: clique e segure no cabeçalho para mover")
+print("🎚️ Sliders inicializados corretamente (sem ficar fora da linha)")
