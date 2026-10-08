@@ -1,24 +1,24 @@
 --[[
-    Basic Moviments Control v3.9
-    Velocidade | Pulo | ESP | Noclip | Hitbox Expander | Fly
-    ESP: Nome + Distância + Chams (com escala dinâmica)
-    Layout: 685px com espaço extra após FLY
-    NOVO v3.7: Painel ARRASTÁVEL + HITBOX EXPANDER (placeholder) + botão 👁/👁❌
-    NOVO v3.8: Sliders corrigidos + Minimizar/Fechar funcionais
-    NOVO v3.9: Hitbox Expander FUNCIONAL + botão de visualização controla visibilidade
+    Basic Moviments Control v4.7
+    Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly
+    
+    NOVO v4.7:
+    - Altura do painel reduzida para 790px (20px a menos)
+    - Bottom spacer ajustado para 75px
 --]]
 
 -- ============================================
 -- SERVIÇOS E BIBLIOTECAS
 -- ============================================
 
-local Players, UIS, CoreGui, RunService, VirtualUser, TweenService = 
+local Players, UIS, CoreGui, RunService, VirtualUser, TweenService, VirtualInputManager = 
     game:GetService("Players"), 
     game:GetService("UserInputService"), 
     game:GetService("CoreGui"), 
     game:GetService("RunService"), 
     game:GetService("VirtualUser"), 
-    game:GetService("TweenService")
+    game:GetService("TweenService"),
+    game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
@@ -70,7 +70,7 @@ function ConfigManager.new()
     self.data = {
         speed = { value = 16, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
-        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false },
+        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false },
         window = { minimized = false }
     }
     return self
@@ -287,7 +287,6 @@ end
 
 -- ============================================
 -- MÓDULO DE ESP (Nome + Distância + Chams)
--- COM ESCALA DINÂMICA
 -- ============================================
 
 local ESPModule = {}
@@ -570,16 +569,125 @@ function NoclipModule:setupNoclip()
 end
 
 -- ============================================
--- MÓDULO DE HITBOX EXPANDER (FUNCIONAL)
+-- MÓDULO AUTO PRESSER (modo HOLD real)
 -- ============================================
--- Baseado no 1º script:
---   - Expande o HumanoidRootPart de outros jogadores
---   - Mantém .Touched, GetPartsInPart, raycast, ferramentas, dano, empurrão
---   - NÃO mexe em Massless / CanCollide / CustomPhysicalProperties (não congela)
---   - Botão de visualização (👁) controla se a hitbox fica visível ou invisível
---     * Visualização ON  -> hitbox grande E visível (Transparency = 0.7)
---     * Visualização OFF -> hitbox grande MAS invisível (Transparency = 1)
---   - Ao desativar o Hitbox: hitbox volta ao tamanho padrão e volta a ser invisível
+
+local AutoPresserModule = {}
+AutoPresserModule.__index = AutoPresserModule
+
+function AutoPresserModule.new(config)
+    local self = setmetatable({}, AutoPresserModule)
+    self.config = config
+    self.isEnabled = false
+    self.isHolding = false
+    self.isKeyHeld = false
+    self.pressKey = Enum.KeyCode.E
+    self.toggleKey = Enum.KeyCode.R
+    self.keyConnection = nil
+    self.reinforceThread = nil
+    return self
+end
+
+function AutoPresserModule:_connectKeyToggle()
+    if self.keyConnection then return end
+    self.keyConnection = UIS.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == self.toggleKey and self.isEnabled then
+            self:toggleHold()
+        end
+    end)
+end
+
+function AutoPresserModule:_disconnectKeyToggle()
+    if self.keyConnection then
+        self.keyConnection:Disconnect()
+        self.keyConnection = nil
+    end
+end
+
+function AutoPresserModule:_holdKey()
+    if self.isKeyHeld then return end
+    VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
+    self.isKeyHeld = true
+end
+
+function AutoPresserModule:_releaseKey()
+    if not self.isKeyHeld then return end
+    VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game)
+    self.isKeyHeld = false
+end
+
+function AutoPresserModule:_startReinforce()
+    if self.reinforceThread then return end
+    self.reinforceThread = task.spawn(function()
+        while self.isHolding do
+            task.wait(0.5)
+            if self.isHolding and self.isKeyHeld then
+                VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
+            end
+        end
+        self.reinforceThread = nil
+    end)
+end
+
+function AutoPresserModule:_stopReinforce()
+    self.reinforceThread = nil
+end
+
+function AutoPresserModule:toggleHold()
+    if not self.isEnabled then return end
+
+    if self.isHolding then
+        self.isHolding = false
+        self:_stopReinforce()
+        self:_releaseKey()
+        print("🖱️ Auto Presser: [E] SOLTA (aguardando R)")
+    else
+        self.isHolding = true
+        self:_holdKey()
+        self:_startReinforce()
+        print("🖱️ Auto Presser: [E] SEGURANDO")
+    end
+
+    if self.onHoldChanged then
+        self.onHoldChanged(self.isHolding)
+    end
+end
+
+function AutoPresserModule:enable()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    self.config:set("features.autoPresser", true)
+    self:_connectKeyToggle()
+    print("🖱️ Auto Presser ARMADO — pressione [R] para começar a segurar [E]")
+end
+
+function AutoPresserModule:disable()
+    if not self.isEnabled then return end
+
+    if self.isHolding then
+        self.isHolding = false
+        self:_stopReinforce()
+        self:_releaseKey()
+    end
+
+    self.isEnabled = false
+    self.config:set("features.autoPresser", false)
+    self:_disconnectKeyToggle()
+    print("🖱️ Auto Presser DESARMADO")
+end
+
+function AutoPresserModule:toggle()
+    if self.isEnabled then
+        self:disable()
+    else
+        self:enable()
+    end
+    return self.isEnabled
+end
+
+-- ============================================
+-- MÓDULO DE HITBOX EXPANDER
 -- ============================================
 
 local HitboxModule = {}
@@ -593,11 +701,10 @@ function HitboxModule.new(config)
     self.connection = nil
     self.originalSizes = {}
 
-    -- Configurações
-    self.HITBOX_SIZE = Vector3.new(120, 120, 120)     -- tamanho expandido
-    self.DEFAULT_SIZE = Vector3.new(2, 2, 1)       -- tamanho padrão do HRP
-    self.VISIBLE_TRANSPARENCY = 0.7                -- quando visualização ON
-    self.INVISIBLE_TRANSPARENCY = 1                -- quando visualização OFF
+    self.HITBOX_SIZE = Vector3.new(120, 120, 120)
+    self.DEFAULT_SIZE = Vector3.new(2, 2, 1)
+    self.VISIBLE_TRANSPARENCY = 0.7
+    self.INVISIBLE_TRANSPARENCY = 1
 
     return self
 end
@@ -611,25 +718,17 @@ function HitboxModule:_expandHitbox(character)
     local hrp = self:_getHRP(character)
     if not hrp then return end
 
-    -- Salva o tamanho original (uma vez só)
     if not self.originalSizes[character] then
         self.originalSizes[character] = hrp.Size
     end
 
-    -- ⬇️ ESSENCIAL: expandir o HumanoidRootPart de verdade
-    -- Isso mantém TODAS as detecções funcionando:
-    -- .Touched, GetPartsInPart, raycast, ferramentas, dano, empurrão
     hrp.Size = self.HITBOX_SIZE
 
-    -- Visibilidade depende do estado do botão 👁
     if self.isViewing then
         hrp.Transparency = self.VISIBLE_TRANSPARENCY
     else
         hrp.Transparency = self.INVISIBLE_TRANSPARENCY
     end
-
-    -- ⚠️ NÃO MEXER em Massless / CanCollide / CustomPhysicalProperties
-    -- Essas linhas eram o que CONGELAVA o movimento no 1º script.
 end
 
 function HitboxModule:_restoreHitbox(character)
@@ -670,7 +769,6 @@ function HitboxModule:enable()
 
     self:_applyToAll()
 
-    -- Loop para pegar novos players e respawns
     self.connection = RunService.Heartbeat:Connect(function()
         if not self.isEnabled then return end
         for _, p in ipairs(Players:GetPlayers()) do
@@ -683,7 +781,7 @@ function HitboxModule:enable()
         end
     end)
 
-    print("🎯 Hitbox Expander ATIVADO! (tamanho: " .. tostring(self.HITBOX_SIZE) .. ")")
+    print("🎯 Hitbox Expander ATIVADO!")
 end
 
 function HitboxModule:disable()
@@ -697,13 +795,12 @@ function HitboxModule:disable()
     end
 
     self:_restoreAll()
-    print("🎯 Hitbox Expander DESATIVADO! (tamanho restaurado)")
+    print("🎯 Hitbox Expander DESATIVADO!")
 end
 
 function HitboxModule:setViewing(state)
     self.isViewing = state
 
-    -- Aplica a visibilidade em todas as hitboxes já expandidas
     if self.isEnabled then
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player and p.Character then
@@ -717,12 +814,6 @@ function HitboxModule:setViewing(state)
                 end
             end
         end
-    end
-
-    if state then
-        print("👁 Visualização do Hitbox ATIVADA (hitbox visível)")
-    else
-        print("👁❌ Visualização do Hitbox DESATIVADA (hitbox invisível)")
     end
 end
 
@@ -757,7 +848,7 @@ function FlyModule:enable()
     self.config:set("features.fly", true)
     self:setupFlyControls()
     self:setupKeyToggle()
-    print("✈️ Fly ATIVADO! Pressione F para voar. Velocidade base: " .. self:getRealSpeed())
+    print("✈️ Fly ATIVADO! Pressione F para voar.")
 end
 
 function FlyModule:disable()
@@ -775,7 +866,6 @@ end
 function FlyModule:setSpeed(value)
     self.speed = math.clamp(value, 1, 10)
     self.config:set("flySpeed.value", self.speed)
-    print("✈️ Velocidade do voo ajustada para: " .. self.speed .. " (equivalente a " .. self:getRealSpeed() .. ")")
 end
 
 function FlyModule:toggleFly()
@@ -785,10 +875,8 @@ function FlyModule:toggleFly()
 
     if self.isFlying then
         self:startFly()
-        print("✈️ Voo ATIVADO (F) - Velocidade: " .. self:getRealSpeed())
     else
         self:stopFly()
-        print("✈️ Voo DESATIVADO (F)")
     end
 end
 
@@ -908,7 +996,7 @@ end
 -- DESIGN PREMIUM
 -- ============================================
 
-local function createUI(speedModule, jumpModule, espModule, noclipModule, hitboxModule, flyModule)
+local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
     local gui = Instance.new("ScreenGui")
     gui.Name, gui.Parent = "BasicMovimentsControlGUI", CoreGui
     gui.ResetOnSpawn, gui.IgnoreGuiInset = false, true
@@ -932,13 +1020,15 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
         hitboxColor = Color3.fromRGB(255, 200, 80),
         flyColor = Color3.fromRGB(0, 230, 255),
         espColor = Color3.fromRGB(200, 130, 255),
+        autoPresserColor = Color3.fromRGB(255, 150, 60),
         gradient1 = Color3.fromRGB(100, 180, 255),
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
+    -- 🔧 ALTURA REDUZIDA: 810 → 790
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 260, 0, 685)
-    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -342)
+    mainFrame.Size = UDim2.new(0, 260, 0, 790)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -395)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 1
@@ -1054,7 +1144,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     subtitle.Size = UDim2.new(0.7, 0, 1, 0)
     subtitle.Position = UDim2.new(0, 42, 0, 0)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Hitbox • Fly"
+    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto Presser • Hitbox • Fly"
     subtitle.TextColor3 = theme.textSecondary
     subtitle.TextSize = 7
     subtitle.Font = Enum.Font.Gotham
@@ -1200,7 +1290,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     sliderContainer.Size = UDim2.new(1, -16, 0, 24)
     sliderContainer.Position = UDim2.new(0, 8, 0, 82)
     sliderContainer.BackgroundTransparency = 1
-    sliderContainer.ClipsDescendants = true
+    sliderContainer.ClipsDescendants = false
     sliderContainer.Parent = speedSection
 
     local minLabel = Instance.new("TextLabel")
@@ -1231,7 +1321,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     sliderTrack.Position = UDim2.new(0, 32, 0.5, -1.5)
     sliderTrack.BackgroundColor3 = theme.surface3
     sliderTrack.BorderSizePixel = 0
-    sliderTrack.ClipsDescendants = true
+    sliderTrack.ClipsDescendants = false
     sliderTrack.Parent = sliderContainer
 
     local trackCorner = Instance.new("UICorner")
@@ -1255,7 +1345,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     sliderButton.BorderSizePixel = 2
     sliderButton.BorderColor3 = theme.background
     sliderButton.Text = ""
-    sliderButton.Parent = sliderContainer
+    sliderButton.ZIndex = 5
+    sliderButton.Parent = sliderTrack
 
     local buttonCorner = Instance.new("UICorner")
     buttonCorner.CornerRadius = UDim.new(1, 0)
@@ -1524,11 +1615,88 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     noclipStatusLabel.Parent = noclipStatusContainer
 
     -- ============================================
-    -- SEÇÃO HITBOX EXPANDER (Y = 393)
+    -- SEÇÃO AUTO PRESSER (Y = 393)
+    -- ============================================
+    local autoPresserSection = Instance.new("Frame")
+    autoPresserSection.Size = UDim2.new(1, 0, 0, 85)
+    autoPresserSection.Position = UDim2.new(0, 0, 0, 393)
+    autoPresserSection.BackgroundTransparency = 1
+    autoPresserSection.Parent = content
+
+    local autoPresserTitleContainer = Instance.new("Frame")
+    autoPresserTitleContainer.Size = UDim2.new(1, 0, 0, 22)
+    autoPresserTitleContainer.BackgroundTransparency = 1
+    autoPresserTitleContainer.Parent = autoPresserSection
+
+    local autoPresserTitleIcon = Instance.new("TextLabel")
+    autoPresserTitleIcon.Size = UDim2.new(0, 18, 1, 0)
+    autoPresserTitleIcon.BackgroundTransparency = 1
+    autoPresserTitleIcon.Text = "🖱️"
+    autoPresserTitleIcon.TextColor3 = theme.autoPresserColor
+    autoPresserTitleIcon.TextSize = 14
+    autoPresserTitleIcon.Font = Enum.Font.GothamBold
+    autoPresserTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
+    autoPresserTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
+    autoPresserTitleIcon.Parent = autoPresserTitleContainer
+
+    local autoPresserTitle = Instance.new("TextLabel")
+    autoPresserTitle.Size = UDim2.new(1, -22, 1, 0)
+    autoPresserTitle.Position = UDim2.new(0, 22, 0, 0)
+    autoPresserTitle.BackgroundTransparency = 1
+    autoPresserTitle.Text = "AUTO PRESSER"
+    autoPresserTitle.TextColor3 = theme.textSecondary
+    autoPresserTitle.TextSize = 13
+    autoPresserTitle.Font = Enum.Font.GothamBold
+    autoPresserTitle.TextXAlignment = Enum.TextXAlignment.Left
+    autoPresserTitle.TextYAlignment = Enum.TextYAlignment.Center
+    autoPresserTitle.Parent = autoPresserTitleContainer
+
+    local autoPresserToggleContainer = Instance.new("Frame")
+    autoPresserToggleContainer.Size = UDim2.new(1, 0, 0, 36)
+    autoPresserToggleContainer.Position = UDim2.new(0, 0, 0, 24)
+    autoPresserToggleContainer.BackgroundTransparency = 1
+    autoPresserToggleContainer.Parent = autoPresserSection
+
+    local autoPresserToggleBtn = Instance.new("TextButton")
+    autoPresserToggleBtn.Size = UDim2.new(0, 96, 0, 32)
+    autoPresserToggleBtn.Position = UDim2.new(0.5, -48, 0.5, -16)
+    autoPresserToggleBtn.BackgroundColor3 = theme.danger
+    autoPresserToggleBtn.BackgroundTransparency = 0.2
+    autoPresserToggleBtn.Text = "OFF"
+    autoPresserToggleBtn.TextColor3 = theme.danger
+    autoPresserToggleBtn.TextSize = 14
+    autoPresserToggleBtn.Font = Enum.Font.GothamBold
+    autoPresserToggleBtn.BorderSizePixel = 2
+    autoPresserToggleBtn.BorderColor3 = theme.danger
+    autoPresserToggleBtn.Parent = autoPresserToggleContainer
+
+    local autoPresserBtnCorner = Instance.new("UICorner")
+    autoPresserBtnCorner.CornerRadius = UDim.new(0, 8)
+    autoPresserBtnCorner.Parent = autoPresserToggleBtn
+
+    local autoPresserStatusContainer = Instance.new("Frame")
+    autoPresserStatusContainer.Size = UDim2.new(1, 0, 0, 16)
+    autoPresserStatusContainer.Position = UDim2.new(0, 0, 0, 64)
+    autoPresserStatusContainer.BackgroundTransparency = 1
+    autoPresserStatusContainer.Parent = autoPresserSection
+
+    local autoPresserStatusLabel = Instance.new("TextLabel")
+    autoPresserStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+    autoPresserStatusLabel.BackgroundTransparency = 1
+    autoPresserStatusLabel.Text = "Ativa/Desativa com [R] • Segura [E]"
+    autoPresserStatusLabel.TextColor3 = theme.textMuted
+    autoPresserStatusLabel.TextSize = 10
+    autoPresserStatusLabel.Font = Enum.Font.Gotham
+    autoPresserStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+    autoPresserStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
+    autoPresserStatusLabel.Parent = autoPresserStatusContainer
+
+    -- ============================================
+    -- SEÇÃO HITBOX EXPANDER (Y = 478)
     -- ============================================
     local hitboxSection = Instance.new("Frame")
     hitboxSection.Size = UDim2.new(1, 0, 0, 85)
-    hitboxSection.Position = UDim2.new(0, 0, 0, 393)
+    hitboxSection.Position = UDim2.new(0, 0, 0, 478)
     hitboxSection.BackgroundTransparency = 1
     hitboxSection.Parent = content
 
@@ -1646,11 +1814,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     hitboxStatusLabel.Parent = hitboxStatusContainer
 
     -- ============================================
-    -- SEÇÃO FLY (Y = 478)
+    -- SEÇÃO FLY (Y = 563)
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 120)
-    flySection.Position = UDim2.new(0, 0, 0, 478)
+    flySection.Position = UDim2.new(0, 0, 0, 563)
     flySection.BackgroundTransparency = 1
     flySection.Parent = content
 
@@ -1723,7 +1891,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     flySliderContainer.Size = UDim2.new(1, -16, 0, 20)
     flySliderContainer.Position = UDim2.new(0, 8, 0, 60)
     flySliderContainer.BackgroundTransparency = 1
-    flySliderContainer.ClipsDescendants = true
+    flySliderContainer.ClipsDescendants = false
     flySliderContainer.Parent = flySection
 
     local flyMinLabel = Instance.new("TextLabel")
@@ -1754,7 +1922,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     flySliderTrack.Position = UDim2.new(0, 26, 0.5, -1.5)
     flySliderTrack.BackgroundColor3 = theme.surface3
     flySliderTrack.BorderSizePixel = 0
-    flySliderTrack.ClipsDescendants = true
+    flySliderTrack.ClipsDescendants = false
     flySliderTrack.Parent = flySliderContainer
 
     local flyTrackCorner = Instance.new("UICorner")
@@ -1778,7 +1946,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     flySliderButton.BorderSizePixel = 2
     flySliderButton.BorderColor3 = theme.background
     flySliderButton.Text = ""
-    flySliderButton.Parent = flySliderContainer
+    flySliderButton.ZIndex = 5
+    flySliderButton.Parent = flySliderTrack
 
     local flyButtonCorner = Instance.new("UICorner")
     flyButtonCorner.CornerRadius = UDim.new(1, 0)
@@ -1825,426 +1994,409 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, hitbox
     flyStatusLabel.Parent = flyStatusContainer
 
     -- ============================================
-    -- ESPAÇO EXTRA
+    -- ESPAÇO EXTRA (Y = 683) — reduzido para 75px
     -- ============================================
     local bottomSpacer = Instance.new("Frame")
-    bottomSpacer.Size = UDim2.new(1, 0, 0, 35)
-    bottomSpacer.Position = UDim2.new(0, 0, 0, 603)
+    bottomSpacer.Size = UDim2.new(1, 0, 0, 75)
+    bottomSpacer.Position = UDim2.new(0, 0, 0, 683)
     bottomSpacer.BackgroundTransparency = 1
     bottomSpacer.Parent = content
 
     -- ============================================
-    -- CORREÇÃO DOS SLIDERS
+    -- SISTEMA DE SLIDERS FUNCIONAL
     -- ============================================
-    local function waitForAbsoluteSize(element, callback)
-        task.spawn(function()
-            while element.AbsoluteSize.X <= 0 do
-                RunService.RenderStepped:Wait()
-            end
-            callback(element.AbsoluteSize.X)
-        end)
-    end
-
-    local isDragging, minValue, maxValue = false, 5, 500
-    local currentValue = speedModule.currentSpeed or 16
     local speedIsActive = false
 
-    local function calculateSliderPosition(value)
-        return math.clamp((value - minValue) / (maxValue - minValue), 0, 1)
+    -- ============================================
+    -- SLIDER DE VELOCIDADE
+    -- ============================================
+    local speedMin = 5
+    local speedMax = 500
+    local currentSpeedValue = speedModule.currentSpeed or 16
+    local speedDragging = false
+    local speedDragConnection = nil
+    local speedReleaseConnection = nil
+
+    local function updateSpeedSliderVisual(value)
+        local percent = (value - speedMin) / (speedMax - speedMin)
+        percent = math.clamp(percent, 0, 1)
+
+        sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+
+        local trackWidth = sliderTrack.AbsoluteSize.X
+        local thumbWidth = sliderButton.AbsoluteSize.X
+        if trackWidth > 0 and thumbWidth > 0 then
+            local maxX = trackWidth - thumbWidth
+            local newX = percent * maxX
+
+            sliderButton.Position = UDim2.new(
+                0,
+                newX,
+                0.5,
+                -thumbWidth / 2
+            )
+        end
+
+        speedValue.Text = tostring(math.floor(value))
     end
 
-    local function updateSliderUI(value, forcedContainerWidth)
-        local percent = calculateSliderPosition(value)
-        local containerWidth = forcedContainerWidth or sliderContainer.AbsoluteSize.X
-        if containerWidth <= 0 then return end
-        local trackWidth = containerWidth - 64
-        local buttonPos = percent * trackWidth
-        sliderButton.Position = UDim2.new(0, 32 + buttonPos - 7, 0.5, -7)
-        sliderFill.Size = UDim2.new(math.clamp(percent, 0, 1), 0, 1, 0)
-    end
+    local function setSpeedValueFromInput(inputX)
+        local trackLeft = sliderTrack.AbsolutePosition.X
+        local trackWidth = sliderTrack.AbsoluteSize.X
+        local thumbWidth = sliderButton.AbsoluteSize.X
+        if trackWidth <= 0 then return end
 
-    local function updateUI(speed, forcedContainerWidth)
-        speed = speed or currentValue
-        currentValue = speed
-        speedValue.Text = tostring(math.floor(speed))
-        updateSliderUI(speed, forcedContainerWidth)
-    end
+        local maxX = trackWidth - thumbWidth
+        if maxX <= 0 then return end
 
-    local function updateSpeed(value)
-        value = math.clamp(value, minValue, maxValue)
-        currentValue = value
+        local relativeX = inputX - trackLeft - (thumbWidth / 2)
+        local percent = relativeX / maxX
+        percent = math.clamp(percent, 0, 1)
+
+        local value = speedMin + percent * (speedMax - speedMin)
+        currentSpeedValue = value
         speedModule:setSpeed(value)
-        updateUI(value)
+        updateSpeedSliderVisual(value)
     end
 
-    local function getSpeedFromMousePosition(input)
-        local containerPos = sliderContainer.AbsolutePosition.X
-        local containerSize = sliderContainer.AbsoluteSize.X
-        local trackStart = containerPos + 32
-        local trackEnd = containerPos + containerSize - 32
-        local mouseX = input.Position.X
-        local percent = math.clamp((mouseX - trackStart) / (trackEnd - trackStart), 0, 1)
-        return minValue + (maxValue - minValue) * percent
-    end
+    task.spawn(function()
+        while sliderTrack.AbsoluteSize.X <= 0 do
+            RunService.RenderStepped:Wait()
+        end
+        updateSpeedSliderVisual(currentSpeedValue)
+    end)
 
     sliderButton.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            isDragging = true
-            updateSpeed(getSpeedFromMousePosition(input))
-        end
-    end)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            speedDragging = true
 
-    UIS.InputChanged:Connect(function(input)
-        if isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            updateSpeed(getSpeedFromMousePosition(input))
-        end
-    end)
+            speedDragConnection = UIS.InputChanged:Connect(function(moveInput)
+                if moveInput.UserInputType == Enum.UserInputType.MouseMovement
+                or moveInput.UserInputType == Enum.UserInputType.Touch then
+                    if speedDragging then
+                        setSpeedValueFromInput(moveInput.Position.X)
+                    end
+                end
+            end)
 
-    sliderButton.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then 
-            isDragging = false 
+            speedReleaseConnection = UIS.InputEnded:Connect(function(endInput)
+                if endInput.UserInputType == Enum.UserInputType.MouseButton1
+                or endInput.UserInputType == Enum.UserInputType.Touch then
+                    speedDragging = false
+                    if speedDragConnection then speedDragConnection:Disconnect() speedDragConnection = nil end
+                    if speedReleaseConnection then speedReleaseConnection:Disconnect() speedReleaseConnection = nil end
+                end
+            end)
         end
     end)
 
     sliderTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local trackPos = sliderTrack.AbsolutePosition.X
-            local trackSize = sliderTrack.AbsoluteSize.X
-            local mouseX = input.Position.X
-            local percent = math.clamp((mouseX - trackPos) / trackSize, 0, 1)
-            local newValue = minValue + (maxValue - minValue) * percent
-            updateSpeed(newValue)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            setSpeedValueFromInput(input.Position.X)
         end
     end)
 
-    waitForAbsoluteSize(sliderContainer, function(width)
-        updateUI(currentValue, width)
-    end)
-
     -- ============================================
-    -- SLIDER DE VOO
+    -- SLIDER DE FLY
     -- ============================================
-    local flyMinVal, flyMaxVal = 1, 10
-    local isFlyDragging = false
+    local flyMin = 1
+    local flyMax = 10
     local currentFlyValue = flyModule.speed or 1
+    local flyDragging = false
+    local flyDragConnection = nil
+    local flyReleaseConnection = nil
 
-    local function calculateFlySliderPosition(value)
-        return math.clamp((value - flyMinVal) / (flyMaxVal - flyMinVal), 0, 1)
-    end
+    local function updateFlySliderVisual(value)
+        local percent = (value - flyMin) / (flyMax - flyMin)
+        percent = math.clamp(percent, 0, 1)
 
-    local function updateFlySliderUI(value, forcedContainerWidth)
-        local percent = calculateFlySliderPosition(value)
-        local containerWidth = forcedContainerWidth or flySliderContainer.AbsoluteSize.X
-        if containerWidth <= 0 then return end
-        local trackWidth = containerWidth - 52
-        local buttonPos = percent * trackWidth
-        flySliderButton.Position = UDim2.new(0, 26 + buttonPos - 6, 0.5, -6)
-        flySliderFill.Size = UDim2.new(math.clamp(percent, 0, 1), 0, 1, 0)
+        flySliderFill.Size = UDim2.new(percent, 0, 1, 0)
+
+        local trackWidth = flySliderTrack.AbsoluteSize.X
+        local thumbWidth = flySliderButton.AbsoluteSize.X
+        if trackWidth > 0 and thumbWidth > 0 then
+            local maxX = trackWidth - thumbWidth
+            local newX = percent * maxX
+
+            flySliderButton.Position = UDim2.new(
+                0,
+                newX,
+                0.5,
+                -thumbWidth / 2
+            )
+        end
+
         flySpeedValue.Text = tostring(math.floor(value))
     end
 
-    local function updateFlySpeed(value)
-        value = math.clamp(value, flyMinVal, flyMaxVal)
+    local function setFlyValueFromInput(inputX)
+        local trackLeft = flySliderTrack.AbsolutePosition.X
+        local trackWidth = flySliderTrack.AbsoluteSize.X
+        local thumbWidth = flySliderButton.AbsoluteSize.X
+        if trackWidth <= 0 then return end
+
+        local maxX = trackWidth - thumbWidth
+        if maxX <= 0 then return end
+
+        local relativeX = inputX - trackLeft - (thumbWidth / 2)
+        local percent = relativeX / maxX
+        percent = math.clamp(percent, 0, 1)
+
+        local value = math.floor(flyMin + percent * (flyMax - flyMin) + 0.5)
         currentFlyValue = value
         flyModule:setSpeed(value)
-        updateFlySliderUI(value)
+        updateFlySliderVisual(value)
     end
 
-    local function getFlySpeedFromMousePosition(input)
-        local containerPos = flySliderContainer.AbsolutePosition.X
-        local containerSize = flySliderContainer.AbsoluteSize.X
-        local trackStart = containerPos + 26
-        local trackEnd = containerPos + containerSize - 26
-        local mouseX = input.Position.X
-        local percent = math.clamp((mouseX - trackStart) / (trackEnd - trackStart), 0, 1)
-        return flyMinVal + (flyMaxVal - flyMinVal) * percent
-    end
+    task.spawn(function()
+        while flySliderTrack.AbsoluteSize.X <= 0 do
+            RunService.RenderStepped:Wait()
+        end
+        updateFlySliderVisual(currentFlyValue)
+    end)
 
     flySliderButton.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            isFlyDragging = true
-            updateFlySpeed(getFlySpeedFromMousePosition(input))
-        end
-    end)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            flyDragging = true
 
-    UIS.InputChanged:Connect(function(input)
-        if isFlyDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            updateFlySpeed(getFlySpeedFromMousePosition(input))
-        end
-    end)
+            flyDragConnection = UIS.InputChanged:Connect(function(moveInput)
+                if moveInput.UserInputType == Enum.UserInputType.MouseMovement
+                or moveInput.UserInputType == Enum.UserInputType.Touch then
+                    if flyDragging then
+                        setFlyValueFromInput(moveInput.Position.X)
+                    end
+                end
+            end)
 
-    flySliderButton.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then 
-            isFlyDragging = false 
+            flyReleaseConnection = UIS.InputEnded:Connect(function(endInput)
+                if endInput.UserInputType == Enum.UserInputType.MouseButton1
+                or endInput.UserInputType == Enum.UserInputType.Touch then
+                    flyDragging = false
+                    if flyDragConnection then flyDragConnection:Disconnect() flyDragConnection = nil end
+                    if flyReleaseConnection then flyReleaseConnection:Disconnect() flyReleaseConnection = nil end
+                end
+            end)
         end
     end)
 
     flySliderTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local trackPos = flySliderTrack.AbsolutePosition.X
-            local trackSize = flySliderTrack.AbsoluteSize.X
-            local mouseX = input.Position.X
-            local percent = math.clamp((mouseX - trackPos) / trackSize, 0, 1)
-            local newValue = flyMinVal + (flyMaxVal - flyMinVal) * percent
-            updateFlySpeed(newValue)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            setFlyValueFromInput(input.Position.X)
         end
     end)
 
-    waitForAbsoluteSize(flySliderContainer, function(width)
-        updateFlySliderUI(currentFlyValue, width)
+    -- ============================================
+    -- HANDLERS DO AUTO PRESSER
+    -- ============================================
+    local function updateAutoPresserStatus()
+        if not autoPresserModule.isEnabled then
+            autoPresserToggleBtn.Text = "OFF"
+            autoPresserToggleBtn.TextColor3 = theme.danger
+            autoPresserToggleBtn.BackgroundColor3 = theme.danger
+            autoPresserToggleBtn.BackgroundTransparency = 0.2
+            autoPresserToggleBtn.BorderColor3 = theme.danger
+
+            autoPresserStatusLabel.Text = "Ativa/Desativa com [R] • Segura [E]"
+            autoPresserStatusLabel.TextColor3 = theme.textMuted
+        elseif autoPresserModule.isHolding then
+            autoPresserToggleBtn.Text = "ON"
+            autoPresserToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            autoPresserToggleBtn.BackgroundColor3 = theme.success
+            autoPresserToggleBtn.BackgroundTransparency = 0.3
+            autoPresserToggleBtn.BorderColor3 = theme.success
+
+            autoPresserStatusLabel.Text = "Pressione [R] para parar • Segurando [E]"
+            autoPresserStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
+        else
+            autoPresserToggleBtn.Text = "ON"
+            autoPresserToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            autoPresserToggleBtn.BackgroundColor3 = theme.success
+            autoPresserToggleBtn.BackgroundTransparency = 0.3
+            autoPresserToggleBtn.BorderColor3 = theme.success
+
+            autoPresserStatusLabel.Text = "Pressione [R] para segurar [E]"
+            autoPresserStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+        end
+    end
+
+    autoPresserModule.onHoldChanged = function(isHolding)
+        updateAutoPresserStatus()
+    end
+
+    autoPresserToggleBtn.MouseButton1Click:Connect(function()
+        autoPresserModule:toggle()
+        updateAutoPresserStatus()
     end)
 
     -- ============================================
-    -- TOGGLES
+    -- HANDLERS DOS OUTROS BOTÕES
     -- ============================================
-
     speedToggleBtn.MouseButton1Click:Connect(function()
         speedIsActive = not speedIsActive
         if speedIsActive then
             speedModule:enable()
-            speedToggleBtn.BackgroundColor3 = theme.success
-            speedToggleBtn.BackgroundTransparency = 0.15
             speedToggleBtn.Text = "ON"
-            speedToggleBtn.TextColor3 = theme.success
+            speedToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            speedToggleBtn.BackgroundColor3 = theme.success
+            speedToggleBtn.BackgroundTransparency = 0.3
             speedToggleBtn.BorderColor3 = theme.success
-            speedValue.TextColor3 = theme.success
         else
             speedModule:disable()
-            speedToggleBtn.BackgroundColor3 = theme.danger
-            speedToggleBtn.BackgroundTransparency = 0.15
             speedToggleBtn.Text = "OFF"
             speedToggleBtn.TextColor3 = theme.danger
+            speedToggleBtn.BackgroundColor3 = theme.danger
+            speedToggleBtn.BackgroundTransparency = 0.15
             speedToggleBtn.BorderColor3 = theme.danger
-            speedValue.TextColor3 = theme.accent
         end
     end)
-
-    local jumpIsActive = false
 
     jumpToggleBtn.MouseButton1Click:Connect(function()
-        jumpIsActive = not jumpIsActive
-
-        if jumpIsActive then
-            jumpModule:enable()
-            jumpToggleBtn.BackgroundColor3 = theme.success
-            jumpToggleBtn.BackgroundTransparency = 0.15
-            jumpToggleBtn.Text = "ON"
-            jumpToggleBtn.TextColor3 = theme.success
-            jumpToggleBtn.BorderColor3 = theme.success
-            jumpStatusLabel.Text = "✅ Pulo ativado"
-            jumpStatusLabel.TextColor3 = theme.success
-        else
+        if jumpModule.isEnabled then
             jumpModule:disable()
-            jumpToggleBtn.BackgroundColor3 = theme.danger
-            jumpToggleBtn.BackgroundTransparency = 0.2
             jumpToggleBtn.Text = "OFF"
             jumpToggleBtn.TextColor3 = theme.danger
+            jumpToggleBtn.BackgroundColor3 = theme.danger
+            jumpToggleBtn.BackgroundTransparency = 0.2
             jumpToggleBtn.BorderColor3 = theme.danger
-            jumpStatusLabel.Text = "Espaço para pular"
-            jumpStatusLabel.TextColor3 = theme.textMuted
+        else
+            jumpModule:enable()
+            jumpToggleBtn.Text = "ON"
+            jumpToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            jumpToggleBtn.BackgroundColor3 = theme.success
+            jumpToggleBtn.BackgroundTransparency = 0.3
+            jumpToggleBtn.BorderColor3 = theme.success
         end
     end)
-
-    local espIsActive = false
 
     espToggleBtn.MouseButton1Click:Connect(function()
-        espIsActive = not espIsActive
-
-        if espIsActive then
-            espModule:enable()
-            espToggleBtn.BackgroundColor3 = theme.success
-            espToggleBtn.BackgroundTransparency = 0.15
-            espToggleBtn.Text = "ON"
-            espToggleBtn.TextColor3 = theme.success
-            espToggleBtn.BorderColor3 = theme.success
-            espStatusLabel.Text = "✅ ESP ativado"
-            espStatusLabel.TextColor3 = theme.success
-        else
+        if espModule.isEnabled then
             espModule:disable()
-            espToggleBtn.BackgroundColor3 = theme.danger
-            espToggleBtn.BackgroundTransparency = 0.2
             espToggleBtn.Text = "OFF"
             espToggleBtn.TextColor3 = theme.danger
+            espToggleBtn.BackgroundColor3 = theme.danger
+            espToggleBtn.BackgroundTransparency = 0.2
             espToggleBtn.BorderColor3 = theme.danger
-            espStatusLabel.Text = "Nome • Distância • Chams"
-            espStatusLabel.TextColor3 = theme.textMuted
+        else
+            espModule:enable()
+            espToggleBtn.Text = "ON"
+            espToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            espToggleBtn.BackgroundColor3 = theme.success
+            espToggleBtn.BackgroundTransparency = 0.3
+            espToggleBtn.BorderColor3 = theme.success
         end
     end)
-
-    local noclipIsActive = false
 
     noclipToggleBtn.MouseButton1Click:Connect(function()
-        noclipIsActive = not noclipIsActive
-
-        if noclipIsActive then
-            noclipModule:enable()
-            noclipToggleBtn.BackgroundColor3 = theme.success
-            noclipToggleBtn.BackgroundTransparency = 0.15
-            noclipToggleBtn.Text = "ON"
-            noclipToggleBtn.TextColor3 = theme.success
-            noclipToggleBtn.BorderColor3 = theme.success
-            noclipStatusLabel.Text = "👻 Noclip ativado"
-            noclipStatusLabel.TextColor3 = theme.success
-        else
+        if noclipModule.isEnabled then
             noclipModule:disable()
-            noclipToggleBtn.BackgroundColor3 = theme.danger
-            noclipToggleBtn.BackgroundTransparency = 0.2
             noclipToggleBtn.Text = "OFF"
             noclipToggleBtn.TextColor3 = theme.danger
+            noclipToggleBtn.BackgroundColor3 = theme.danger
+            noclipToggleBtn.BackgroundTransparency = 0.2
             noclipToggleBtn.BorderColor3 = theme.danger
-            noclipStatusLabel.Text = "Atravesse paredes"
-            noclipStatusLabel.TextColor3 = theme.textMuted
+        else
+            noclipModule:enable()
+            noclipToggleBtn.Text = "ON"
+            noclipToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            noclipToggleBtn.BackgroundColor3 = theme.success
+            noclipToggleBtn.BackgroundTransparency = 0.3
+            noclipToggleBtn.BorderColor3 = theme.success
         end
     end)
-
-    local hitboxIsActive = false
 
     hitboxToggleBtn.MouseButton1Click:Connect(function()
-        hitboxIsActive = not hitboxIsActive
-
-        if hitboxIsActive then
-            hitboxModule:enable()
-            hitboxToggleBtn.BackgroundColor3 = theme.success
-            hitboxToggleBtn.BackgroundTransparency = 0.15
-            hitboxToggleBtn.Text = "ON"
-            hitboxToggleBtn.TextColor3 = theme.success
-            hitboxToggleBtn.BorderColor3 = theme.success
-            hitboxStatusLabel.Text = "🎯 Hitbox Expander ativado"
-            hitboxStatusLabel.TextColor3 = theme.success
-        else
+        if hitboxModule.isEnabled then
             hitboxModule:disable()
-            hitboxToggleBtn.BackgroundColor3 = theme.danger
-            hitboxToggleBtn.BackgroundTransparency = 0.2
             hitboxToggleBtn.Text = "OFF"
             hitboxToggleBtn.TextColor3 = theme.danger
+            hitboxToggleBtn.BackgroundColor3 = theme.danger
+            hitboxToggleBtn.BackgroundTransparency = 0.2
             hitboxToggleBtn.BorderColor3 = theme.danger
-            hitboxStatusLabel.Text = "Expanda a hitbox dos jogadores"
-            hitboxStatusLabel.TextColor3 = theme.textMuted
+        else
+            hitboxModule:enable()
+            hitboxToggleBtn.Text = "ON"
+            hitboxToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            hitboxToggleBtn.BackgroundColor3 = theme.success
+            hitboxToggleBtn.BackgroundTransparency = 0.3
+            hitboxToggleBtn.BorderColor3 = theme.success
         end
     end)
-
-    local hitboxViewActive = false
 
     hitboxViewBtn.MouseButton1Click:Connect(function()
-        hitboxViewActive = not hitboxViewActive
-
-        if hitboxViewActive then
-            hitboxViewBtn.Text = "👁"
-            hitboxViewBtn.TextColor3 = theme.hitboxColor
-            hitboxViewBtn.BorderColor3 = theme.hitboxColor
+        hitboxModule:setViewing(not hitboxModule.isViewing)
+        if hitboxModule.isViewing then
             xOverlay1.Visible = false
             xOverlay2.Visible = false
-            hitboxModule:setViewing(true)
+            hitboxViewBtn.BorderColor3 = theme.success
+            hitboxViewBtn.TextColor3 = theme.text
         else
-            hitboxViewBtn.Text = "👁"
-            hitboxViewBtn.TextColor3 = theme.textMuted
-            hitboxViewBtn.BorderColor3 = theme.danger
             xOverlay1.Visible = true
             xOverlay2.Visible = true
-            hitboxModule:setViewing(false)
+            hitboxViewBtn.BorderColor3 = theme.danger
+            hitboxViewBtn.TextColor3 = theme.textMuted
         end
     end)
-
-    hitboxViewBtn.MouseEnter:Connect(function()
-        TweenService:Create(hitboxViewBtn, TweenInfo.new(0.15), {
-            BackgroundTransparency = 0.1
-        }):Play()
-    end)
-
-    hitboxViewBtn.MouseLeave:Connect(function()
-        TweenService:Create(hitboxViewBtn, TweenInfo.new(0.15), {
-            BackgroundTransparency = 0.3
-        }):Play()
-    end)
-
-    local flyIsActive = false
 
     flyToggleBtn.MouseButton1Click:Connect(function()
-        flyIsActive = not flyIsActive
-
-        if flyIsActive then
-            flyModule:enable()
-            flyToggleBtn.BackgroundColor3 = theme.success
-            flyToggleBtn.BackgroundTransparency = 0.15
-            flyToggleBtn.Text = "ON"
-            flyToggleBtn.TextColor3 = theme.success
-            flyToggleBtn.BorderColor3 = theme.success
-            flyStatusLabel.Text = "✈️ Fly ativado (F para voar)"
-            flyStatusLabel.TextColor3 = theme.success
-        else
+        if flyModule.isEnabled then
             flyModule:disable()
-            flyToggleBtn.BackgroundColor3 = theme.danger
-            flyToggleBtn.BackgroundTransparency = 0.2
             flyToggleBtn.Text = "OFF"
             flyToggleBtn.TextColor3 = theme.danger
+            flyToggleBtn.BackgroundColor3 = theme.danger
+            flyToggleBtn.BackgroundTransparency = 0.2
             flyToggleBtn.BorderColor3 = theme.danger
-            flyStatusLabel.Text = "Pressione F para voar"
-            flyStatusLabel.TextColor3 = theme.textMuted
+        else
+            flyModule:enable()
+            flyToggleBtn.Text = "ON"
+            flyToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            flyToggleBtn.BackgroundColor3 = theme.success
+            flyToggleBtn.BackgroundTransparency = 0.3
+            flyToggleBtn.BorderColor3 = theme.success
         end
     end)
 
     -- ============================================
-    -- MINIMIZAR / FECHAR
+    -- MINIMIZAR
     -- ============================================
-
     local isMinimized = false
-    local fullSize = UDim2.new(0, 260, 0, 685)
-    local minimizedSize = UDim2.new(0, 260, 0, 48)
-
-    local function minimizeWindow()
-        if isMinimized then return end
-        isMinimized = true
-        content.Visible = false
-        subtitle.Text = "Minimizado"
-        TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = minimizedSize}):Play()
-        minBtn.Text = "✚"
-        minBtn.TextColor3 = theme.success
-    end
-
-    local function maximizeWindow()
-        if not isMinimized then return end
-        isMinimized = false
-        content.Visible = true
-        subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Hitbox • Fly"
-        TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = fullSize}):Play()
-        minBtn.Text = "−"
-        minBtn.TextColor3 = theme.textSecondary
-        task.wait(0.45)
-        updateUI(currentValue)
-        updateFlySliderUI(currentFlyValue)
-    end
 
     minBtn.MouseButton1Click:Connect(function()
-        if isMinimized then maximizeWindow() else minimizeWindow() end
+        isMinimized = not isMinimized
+
+        if isMinimized then
+            content.Visible = false
+            TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 260, 0, 48)
+            }):Play()
+            minBtn.Text = "+"
+        else
+            content.Visible = true
+            TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 260, 0, 790)  -- 🔧 NOVO VALOR
+            }):Play()
+            minBtn.Text = "−"
+        end
     end)
 
-    minBtn.MouseEnter:Connect(function()
-        TweenService:Create(minBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = theme.surface3,
-            BackgroundTransparency = 0.3,
-            TextColor3 = theme.text
-        }):Play()
-    end)
-
-    minBtn.MouseLeave:Connect(function()
-        TweenService:Create(minBtn, TweenInfo.new(0.2), {
-            BackgroundColor3 = theme.surface2,
-            BackgroundTransparency = 0.5,
-            TextColor3 = theme.textSecondary
-        }):Play()
-    end)
-
+    -- ============================================
+    -- FECHAR
+    -- ============================================
     closeBtn.MouseButton1Click:Connect(function()
-        gui:SetAttribute("UserClosed", true)
-
-        pcall(function() speedModule:disable()  end)
-        pcall(function() jumpModule:disable()   end)
-        pcall(function() espModule:disable()    end)
+        pcall(function() speedModule:disable() end)
+        pcall(function() jumpModule:disable() end)
+        pcall(function() espModule:disable() end)
         pcall(function() noclipModule:disable() end)
+        pcall(function() autoPresserModule:disable() end)
         pcall(function() hitboxModule:disable() end)
-        pcall(function() flyModule:disable()    end)
+        pcall(function() flyModule:disable() end)
 
-        pcall(function() gui:Destroy() end)
+        gui:Destroy()
+
+        print("❌ Painel fechado — todos os módulos desligados.")
     end)
 end
 
@@ -2257,12 +2409,15 @@ local speedModule = SpeedModule.new(config)
 local jumpModule = InfiniteJumpModule.new(config)
 local espModule = ESPModule.new(config)
 local noclipModule = NoclipModule.new(config)
+local autoPresserModule = AutoPresserModule.new(config)
 local hitboxModule = HitboxModule.new(config)
 local flyModule = FlyModule.new(config)
 
 speedModule:initialize()
-createUI(speedModule, jumpModule, espModule, noclipModule, hitboxModule, flyModule)
 
-print("✅ Basic Moviments Control v3.9 carregado com sucesso!")
-print("🎯 Hitbox Expander FUNCIONAL + 👁 botão de visualização")
-print("📐 Sliders corrigidos + Minimizar/Fechar funcionais")
+createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
+
+print("✅ Basic Moviments Control v4.7 carregado!")
+print("📏 Altura do painel: 790px")
+print("🎚️ Sliders: thumb alinhado com o fill, dentro do track")
+print("🖱️ Auto Presser: botão ON arma • tecla R segura/solta [E] (modo HOLD)")
