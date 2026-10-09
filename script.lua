@@ -1,10 +1,13 @@
 --[[
-    Basic Moviments Control v4.7
+    Basic Settings Control v4.7
     Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly
     
     NOVO v4.7:
-    - Altura do painel reduzida para 790px (20px a menos)
-    - Bottom spacer ajustado para 75px
+    - Nome do cabeçalho: "Basic Settings Control"
+    - Altura do painel: 790px
+    - Bottom spacer: 75px
+    - Sliders com thumb alinhado com o fill
+    - Auto Presser em modo HOLD real
 --]]
 
 -- ============================================
@@ -998,7 +1001,7 @@ end
 
 local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
     local gui = Instance.new("ScreenGui")
-    gui.Name, gui.Parent = "BasicMovimentsControlGUI", CoreGui
+    gui.Name, gui.Parent = "BasicSettingsControlGUI", CoreGui
     gui.ResetOnSpawn, gui.IgnoreGuiInset = false, true
 
     local theme = {
@@ -1025,7 +1028,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- 🔧 ALTURA REDUZIDA: 810 → 790
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 260, 0, 790)
     mainFrame.Position = UDim2.new(0.5, -130, 0.5, -395)
@@ -1132,7 +1134,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     title.Size = UDim2.new(0.7, 0, 1, 0)
     title.Position = UDim2.new(0, 42, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Basic Moviments Control ⚙"
+    title.Text = "Basic Settings Control ⚙"   -- 🔧 NOME ALTERADO
     title.TextColor3 = theme.text
     title.TextSize = 12
     title.Font = Enum.Font.GothamBold
@@ -1994,7 +1996,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyStatusLabel.Parent = flyStatusContainer
 
     -- ============================================
-    -- ESPAÇO EXTRA (Y = 683) — reduzido para 75px
+    -- ESPAÇO EXTRA (Y = 683)
     -- ============================================
     local bottomSpacer = Instance.new("Frame")
     bottomSpacer.Size = UDim2.new(1, 0, 0, 75)
@@ -2376,7 +2378,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         else
             content.Visible = true
             TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 260, 0, 790)  -- 🔧 NOVO VALOR
+                Size = UDim2.new(0, 260, 0, 790)
             }):Play()
             minBtn.Text = "−"
         end
@@ -2417,7 +2419,7 @@ speedModule:initialize()
 
 createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
 
-print("✅ Basic Moviments Control v4.7 carregado!")
+print("✅ Basic Settings Control v4.7 carregado!")
 print("📏 Altura do painel: 790px")
 print("🎚️ Sliders: thumb alinhado com o fill, dentro do track")
 print("🖱️ Auto Presser: botão ON arma • tecla R segura/solta [E] (modo HOLD)")
