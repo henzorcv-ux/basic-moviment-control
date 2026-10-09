@@ -1,13 +1,13 @@
 --[[
-    Basic Settings Control v4.7
+    Basic Settings Control v4.8
     Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly
     
-    NOVO v4.7:
-    - Nome do cabeçalho: "Basic Settings Control"
-    - Altura do painel: 790px
-    - Bottom spacer: 75px
-    - Sliders com thumb alinhado com o fill
-    - Auto Presser em modo HOLD real
+    NOVO v4.8:
+    - Seletor de teclas por captura direta no Auto Presser
+      * Clique na tecla mostrada → aperta nova tecla → atribui
+      * Funciona para tecla de ativação e tecla segurada
+      * Escape cancela a captura
+    - Altura do painel: 835px
 --]]
 
 -- ============================================
@@ -644,12 +644,12 @@ function AutoPresserModule:toggleHold()
         self.isHolding = false
         self:_stopReinforce()
         self:_releaseKey()
-        print("🖱️ Auto Presser: [E] SOLTA (aguardando R)")
+        print("🖱️ Auto Presser: [" .. self.pressKey.Name .. "] SOLTA")
     else
         self.isHolding = true
         self:_holdKey()
         self:_startReinforce()
-        print("🖱️ Auto Presser: [E] SEGURANDO")
+        print("🖱️ Auto Presser: [" .. self.pressKey.Name .. "] SEGURANDO")
     end
 
     if self.onHoldChanged then
@@ -662,7 +662,7 @@ function AutoPresserModule:enable()
     self.isEnabled = true
     self.config:set("features.autoPresser", true)
     self:_connectKeyToggle()
-    print("🖱️ Auto Presser ARMADO — pressione [R] para começar a segurar [E]")
+    print("🖱️ Auto Presser ARMADO — pressione [" .. self.toggleKey.Name .. "] para começar a segurar [" .. self.pressKey.Name .. "]")
 end
 
 function AutoPresserModule:disable()
@@ -1029,8 +1029,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     }
 
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 260, 0, 790)
-    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -395)
+    mainFrame.Size = UDim2.new(0, 260, 0, 835)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -417)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 1
@@ -1134,7 +1134,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     title.Size = UDim2.new(0.7, 0, 1, 0)
     title.Position = UDim2.new(0, 42, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Basic Settings Control ⚙"   -- 🔧 NOME ALTERADO
+    title.Text = "Basic Settings Control ⚙"
     title.TextColor3 = theme.text
     title.TextSize = 12
     title.Font = Enum.Font.GothamBold
@@ -1617,10 +1617,10 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipStatusLabel.Parent = noclipStatusContainer
 
     -- ============================================
-    -- SEÇÃO AUTO PRESSER (Y = 393)
+    -- SEÇÃO AUTO PRESSER (Y = 393, altura = 130)
     -- ============================================
     local autoPresserSection = Instance.new("Frame")
-    autoPresserSection.Size = UDim2.new(1, 0, 0, 85)
+    autoPresserSection.Size = UDim2.new(1, 0, 0, 130)
     autoPresserSection.Position = UDim2.new(0, 0, 0, 393)
     autoPresserSection.BackgroundTransparency = 1
     autoPresserSection.Parent = content
@@ -1694,11 +1694,78 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoPresserStatusLabel.Parent = autoPresserStatusContainer
 
     -- ============================================
-    -- SEÇÃO HITBOX EXPANDER (Y = 478)
+    -- SELETORES DE TECLAS (CAPTURA DIRETA)
+    -- ============================================
+    local keySelectorContainer = Instance.new("Frame")
+    keySelectorContainer.Size = UDim2.new(1, 0, 0, 45)
+    keySelectorContainer.Position = UDim2.new(0, 0, 0, 82)
+    keySelectorContainer.BackgroundTransparency = 1
+    keySelectorContainer.Parent = autoPresserSection
+
+    -- ===== BOTÃO: TECLA ATIVA (esquerda) =====
+    local toggleKeyBtn = Instance.new("TextButton")
+    toggleKeyBtn.Size = UDim2.new(0.5, -6, 0, 32)
+    toggleKeyBtn.Position = UDim2.new(0, 0, 0, 0)
+    toggleKeyBtn.BackgroundColor3 = theme.surface2
+    toggleKeyBtn.BackgroundTransparency = 0.3
+    toggleKeyBtn.Text = "R"
+    toggleKeyBtn.TextColor3 = theme.autoPresserColor
+    toggleKeyBtn.TextSize = 16
+    toggleKeyBtn.Font = Enum.Font.GothamBold
+    toggleKeyBtn.BorderSizePixel = 2
+    toggleKeyBtn.BorderColor3 = theme.autoPresserColor
+    toggleKeyBtn.Parent = keySelectorContainer
+
+    local toggleKeyBtnCorner = Instance.new("UICorner")
+    toggleKeyBtnCorner.CornerRadius = UDim.new(0, 8)
+    toggleKeyBtnCorner.Parent = toggleKeyBtn
+
+    local toggleKeyCaption = Instance.new("TextLabel")
+    toggleKeyCaption.Size = UDim2.new(0.5, -6, 0, 12)
+    toggleKeyCaption.Position = UDim2.new(0, 0, 1, -12)
+    toggleKeyCaption.BackgroundTransparency = 1
+    toggleKeyCaption.Text = "TECLA ATIVA"
+    toggleKeyCaption.TextColor3 = theme.textMuted
+    toggleKeyCaption.TextSize = 8
+    toggleKeyCaption.Font = Enum.Font.GothamBold
+    toggleKeyCaption.TextXAlignment = Enum.TextXAlignment.Center
+    toggleKeyCaption.Parent = keySelectorContainer
+
+    -- ===== BOTÃO: TECLA SEGURA (direita) =====
+    local pressKeyBtn = Instance.new("TextButton")
+    pressKeyBtn.Size = UDim2.new(0.5, -6, 0, 32)
+    pressKeyBtn.Position = UDim2.new(0.5, 6, 0, 0)
+    pressKeyBtn.BackgroundColor3 = theme.surface2
+    pressKeyBtn.BackgroundTransparency = 0.3
+    pressKeyBtn.Text = "E"
+    pressKeyBtn.TextColor3 = theme.autoPresserColor
+    pressKeyBtn.TextSize = 16
+    pressKeyBtn.Font = Enum.Font.GothamBold
+    pressKeyBtn.BorderSizePixel = 2
+    pressKeyBtn.BorderColor3 = theme.autoPresserColor
+    pressKeyBtn.Parent = keySelectorContainer
+
+    local pressKeyBtnCorner = Instance.new("UICorner")
+    pressKeyBtnCorner.CornerRadius = UDim.new(0, 8)
+    pressKeyBtnCorner.Parent = pressKeyBtn
+
+    local pressKeyCaption = Instance.new("TextLabel")
+    pressKeyCaption.Size = UDim2.new(0.5, -6, 0, 12)
+    pressKeyCaption.Position = UDim2.new(0.5, 6, 1, -12)
+    pressKeyCaption.BackgroundTransparency = 1
+    pressKeyCaption.Text = "TECLA SEGURA"
+    pressKeyCaption.TextColor3 = theme.textMuted
+    pressKeyCaption.TextSize = 8
+    pressKeyCaption.Font = Enum.Font.GothamBold
+    pressKeyCaption.TextXAlignment = Enum.TextXAlignment.Center
+    pressKeyCaption.Parent = keySelectorContainer
+
+    -- ============================================
+    -- SEÇÃO HITBOX EXPANDER (Y = 523)
     -- ============================================
     local hitboxSection = Instance.new("Frame")
     hitboxSection.Size = UDim2.new(1, 0, 0, 85)
-    hitboxSection.Position = UDim2.new(0, 0, 0, 478)
+    hitboxSection.Position = UDim2.new(0, 0, 0, 523)
     hitboxSection.BackgroundTransparency = 1
     hitboxSection.Parent = content
 
@@ -1816,11 +1883,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxStatusLabel.Parent = hitboxStatusContainer
 
     -- ============================================
-    -- SEÇÃO FLY (Y = 563)
+    -- SEÇÃO FLY (Y = 608)
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 120)
-    flySection.Position = UDim2.new(0, 0, 0, 563)
+    flySection.Position = UDim2.new(0, 0, 0, 608)
     flySection.BackgroundTransparency = 1
     flySection.Parent = content
 
@@ -1996,11 +2063,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyStatusLabel.Parent = flyStatusContainer
 
     -- ============================================
-    -- ESPAÇO EXTRA (Y = 683)
+    -- ESPAÇO EXTRA (Y = 728)
     -- ============================================
     local bottomSpacer = Instance.new("Frame")
     bottomSpacer.Size = UDim2.new(1, 0, 0, 75)
-    bottomSpacer.Position = UDim2.new(0, 0, 0, 683)
+    bottomSpacer.Position = UDim2.new(0, 0, 0, 728)
     bottomSpacer.BackgroundTransparency = 1
     bottomSpacer.Parent = content
 
@@ -2192,9 +2259,108 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     end)
 
     -- ============================================
-    -- HANDLERS DO AUTO PRESSER
+    -- LÓGICA DE CAPTURA DE TECLAS (AUTO PRESSER)
+    -- ============================================
+    local capturingFor = nil
+    local captureConnection = nil
+
+    local function stopCapturing()
+        if captureConnection then
+            captureConnection:Disconnect()
+            captureConnection = nil
+        end
+        capturingFor = nil
+
+        toggleKeyBtn.Text = autoPresserModule.toggleKey.Name
+        toggleKeyBtn.TextColor3 = theme.autoPresserColor
+        toggleKeyBtn.BorderColor3 = theme.autoPresserColor
+        toggleKeyBtn.TextSize = 16
+
+        pressKeyBtn.Text = autoPresserModule.pressKey.Name
+        pressKeyBtn.TextColor3 = theme.autoPresserColor
+        pressKeyBtn.BorderColor3 = theme.autoPresserColor
+        pressKeyBtn.TextSize = 16
+    end
+
+    local function updateStatusText()
+        local keyT = autoPresserModule.toggleKey.Name
+        local keyP = autoPresserModule.pressKey.Name
+
+        if not autoPresserModule.isEnabled then
+            autoPresserStatusLabel.Text = string.format(
+                "Ativa/Desativa com [%s] • Segura [%s]", keyT, keyP
+            )
+            autoPresserStatusLabel.TextColor3 = theme.textMuted
+        elseif autoPresserModule.isHolding then
+            autoPresserStatusLabel.Text = string.format(
+                "Pressione [%s] para parar • Segurando [%s]", keyT, keyP
+            )
+            autoPresserStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
+        else
+            autoPresserStatusLabel.Text = string.format(
+                "Pressione [%s] para segurar [%s]", keyT, keyP
+            )
+            autoPresserStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+        end
+    end
+
+    local function startCapturing(mode)
+        if capturingFor then stopCapturing() end
+        capturingFor = mode
+
+        if mode == "toggle" then
+            toggleKeyBtn.Text = "Pressione..."
+            toggleKeyBtn.TextColor3 = theme.warning
+            toggleKeyBtn.BorderColor3 = theme.warning
+            toggleKeyBtn.TextSize = 11
+        else
+            pressKeyBtn.Text = "Pressione..."
+            pressKeyBtn.TextColor3 = theme.warning
+            pressKeyBtn.BorderColor3 = theme.warning
+            pressKeyBtn.TextSize = 11
+        end
+
+        captureConnection = UIS.InputBegan:Connect(function(input, gameProcessed)
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+            if input.KeyCode == Enum.KeyCode.Escape then
+                stopCapturing()
+                return
+            end
+
+            if capturingFor == "toggle" then
+                autoPresserModule.toggleKey = input.KeyCode
+                toggleKeyBtn.Text = input.KeyCode.Name
+            elseif capturingFor == "press" then
+                autoPresserModule.pressKey = input.KeyCode
+                pressKeyBtn.Text = input.KeyCode.Name
+            end
+
+            if autoPresserModule.isEnabled then
+                autoPresserModule:_disconnectKeyToggle()
+                autoPresserModule:_connectKeyToggle()
+            end
+
+            updateStatusText()
+            stopCapturing()
+        end)
+    end
+
+    toggleKeyBtn.MouseButton1Click:Connect(function()
+        startCapturing("toggle")
+    end)
+
+    pressKeyBtn.MouseButton1Click:Connect(function()
+        startCapturing("press")
+    end)
+
+    -- ============================================
+    -- HANDLERS DO AUTO PRESSER (botão ON/OFF)
     -- ============================================
     local function updateAutoPresserStatus()
+        local keyT = autoPresserModule.toggleKey.Name
+        local keyP = autoPresserModule.pressKey.Name
+
         if not autoPresserModule.isEnabled then
             autoPresserToggleBtn.Text = "OFF"
             autoPresserToggleBtn.TextColor3 = theme.danger
@@ -2202,7 +2368,9 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             autoPresserToggleBtn.BackgroundTransparency = 0.2
             autoPresserToggleBtn.BorderColor3 = theme.danger
 
-            autoPresserStatusLabel.Text = "Ativa/Desativa com [R] • Segura [E]"
+            autoPresserStatusLabel.Text = string.format(
+                "Ativa/Desativa com [%s] • Segura [%s]", keyT, keyP
+            )
             autoPresserStatusLabel.TextColor3 = theme.textMuted
         elseif autoPresserModule.isHolding then
             autoPresserToggleBtn.Text = "ON"
@@ -2211,7 +2379,9 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             autoPresserToggleBtn.BackgroundTransparency = 0.3
             autoPresserToggleBtn.BorderColor3 = theme.success
 
-            autoPresserStatusLabel.Text = "Pressione [R] para parar • Segurando [E]"
+            autoPresserStatusLabel.Text = string.format(
+                "Pressione [%s] para parar • Segurando [%s]", keyT, keyP
+            )
             autoPresserStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
         else
             autoPresserToggleBtn.Text = "ON"
@@ -2220,7 +2390,9 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             autoPresserToggleBtn.BackgroundTransparency = 0.3
             autoPresserToggleBtn.BorderColor3 = theme.success
 
-            autoPresserStatusLabel.Text = "Pressione [R] para segurar [E]"
+            autoPresserStatusLabel.Text = string.format(
+                "Pressione [%s] para segurar [%s]", keyT, keyP
+            )
             autoPresserStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
         end
     end
@@ -2378,7 +2550,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         else
             content.Visible = true
             TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 260, 0, 790)
+                Size = UDim2.new(0, 260, 0, 835)
             }):Play()
             minBtn.Text = "−"
         end
@@ -2419,7 +2591,7 @@ speedModule:initialize()
 
 createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
 
-print("✅ Basic Settings Control v4.7 carregado!")
-print("📏 Altura do painel: 790px")
+print("✅ Basic Settings Control v4.8 carregado!")
+print("📏 Altura do painel: 835px")
 print("🎚️ Sliders: thumb alinhado com o fill, dentro do track")
-print("🖱️ Auto Presser: botão ON arma • tecla R segura/solta [E] (modo HOLD)")
+print("🖱️ Auto Presser: teclas customizáveis por captura direta")
