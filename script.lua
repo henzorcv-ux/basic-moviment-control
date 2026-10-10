@@ -1,11 +1,14 @@
 --[[
-    Basic Settings Control v4.9.1
+    Basic Settings Control v5.3
     Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly
 
-    v4.9.1:
-    - Botão de fechar corrigido: exibe "X" em vez de um quadrado
+    v5.3:
+    - Linha divisória com scan RGB REMOVIDA completamente
+    - ESP com escala dinâmica (v4.9.1)
+    - Botão de Velocidade corrigido
+    - Efeitos Aurora mantidos
+    - Botão de fechar "X" corrigido
     - Tamanho: 240 × 830px
-    - Todas as melhorias visuais da v4.9 mantidas
 --]]
 
 -- ============================================
@@ -98,7 +101,7 @@ function ConfigManager:set(path, value)
 end
 
 -- ============================================
--- MÓDULO DE VELOCIDADE
+-- MÓDULO DE VELOCIDADE (com proteção completa)
 -- ============================================
 
 local SpeedModule = {}
@@ -112,6 +115,7 @@ function SpeedModule.new(config)
     self.character, self.humanoid, self.originalSpeed = nil, nil, nil
     self.velocityCheckConnection = nil
     self.forceSpeedConnection = nil
+    self.humanoidChangedConnection = nil
     return self
 end
 
@@ -208,14 +212,16 @@ function SpeedModule:startSpeedProtection()
         end)
     end
 
-    self.humanoidChangedConnection = self.humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-        if self.isEnabled and self.humanoid then
-            local currentSpeed = self.humanoid.WalkSpeed
-            if currentSpeed ~= self.currentSpeed then
-                self.humanoid.WalkSpeed = self.currentSpeed
+    if self.humanoid then
+        self.humanoidChangedConnection = self.humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+            if self.isEnabled and self.humanoid then
+                local currentSpeed = self.humanoid.WalkSpeed
+                if currentSpeed ~= self.currentSpeed then
+                    self.humanoid.WalkSpeed = self.currentSpeed
+                end
             end
-        end
-    end)
+        end)
+    end
 end
 
 function SpeedModule:stopSpeedProtection()
@@ -287,7 +293,7 @@ function InfiniteJumpModule:setupJumpListener()
 end
 
 -- ============================================
--- MÓDULO DE ESP
+-- MÓDULO DE ESP (com escala dinâmica)
 -- ============================================
 
 local ESPModule = {}
@@ -990,7 +996,7 @@ function FlyModule:cleanupFly()
 end
 
 -- ============================================
--- DESIGN PREMIUM v4.9.1
+-- DESIGN PREMIUM v5.3
 -- ============================================
 
 local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
@@ -1028,14 +1034,41 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     mainFrame.Position = UDim2.new(0.5, -120, 0.5, -415)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
-    mainFrame.BorderSizePixel = 1
-    mainFrame.BorderColor3 = theme.border
+    mainFrame.BorderSizePixel = 0
     mainFrame.ClipsDescendants = true
     mainFrame.Parent = gui
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 14)
     corner.Parent = mainFrame
+
+    -- Borda Aurora com gradiente animado
+    local auroraStroke = Instance.new("UIStroke")
+    auroraStroke.Thickness = 2
+    auroraStroke.Color = theme.accent
+    auroraStroke.Transparency = 0.15
+    auroraStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    auroraStroke.Parent = mainFrame
+
+    local auroraGradient = Instance.new("UIGradient")
+    auroraGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, theme.accent),
+        ColorSequenceKeypoint.new(0.25, theme.espColor),
+        ColorSequenceKeypoint.new(0.5, theme.flyColor),
+        ColorSequenceKeypoint.new(0.75, theme.jumpColor),
+        ColorSequenceKeypoint.new(1, theme.accent),
+    })
+    auroraGradient.Rotation = 0
+    auroraGradient.Parent = auroraStroke
+
+    task.spawn(function()
+        local rotation = 0
+        while gui.Parent do
+            rotation = (rotation + 1) % 360
+            auroraGradient.Rotation = rotation
+            RunService.RenderStepped:Wait()
+        end
+    end)
 
     -- Sombra dupla
     local shadow1 = Instance.new("Frame")
@@ -1084,14 +1117,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     gradient.Rotation = 45
     gradient.Parent = header
 
-    local headerLine = Instance.new("Frame")
-    headerLine.Size = UDim2.new(1, 0, 0, 1)
-    headerLine.Position = UDim2.new(0, 0, 1, -1)
-    headerLine.BackgroundColor3 = theme.gradient2
-    headerLine.BackgroundTransparency = 0.3
-    headerLine.BorderSizePixel = 0
-    headerLine.Parent = header
-
+    -- Logo com glow pulsante
     local logoBox = Instance.new("Frame")
     logoBox.Size = UDim2.new(0, 26, 0, 26)
     logoBox.Position = UDim2.new(0, 10, 0.5, -13)
@@ -1109,6 +1135,15 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     logoBoxStroke.Color = Color3.fromRGB(255, 255, 255)
     logoBoxStroke.Transparency = 0.4
     logoBoxStroke.Parent = logoBox
+
+    task.spawn(function()
+        while gui.Parent do
+            TweenService:Create(logoBoxStroke, TweenInfo.new(1.5), {Transparency = 0.7}):Play()
+            task.wait(1.5)
+            TweenService:Create(logoBoxStroke, TweenInfo.new(1.5), {Transparency = 0.2}):Play()
+            task.wait(1.5)
+        end
+    end)
 
     local titleIcon = Instance.new("TextLabel")
     titleIcon.Size = UDim2.new(1, 0, 1, 0)
@@ -1136,10 +1171,20 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     local titleGrad = Instance.new("UIGradient")
     titleGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 220, 255)),
     })
     titleGrad.Rotation = 90
     titleGrad.Parent = title
+
+    task.spawn(function()
+        local rot = 0
+        while gui.Parent do
+            rot = (rot + 2) % 360
+            titleGrad.Rotation = rot
+            RunService.RenderStepped:Wait()
+        end
+    end)
 
     local subtitle = Instance.new("TextLabel")
     subtitle.Size = UDim2.new(0.7, 0, 0, 14)
@@ -1175,7 +1220,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     minCorner.CornerRadius = UDim.new(0, 6)
     minCorner.Parent = minBtn
 
-    -- ✅ Botão fechar com "X" literal
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 22, 0, 22)
     closeBtn.Position = UDim2.new(1, -24, 0.5, -11)
@@ -1241,6 +1285,66 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     content.BackgroundTransparency = 1
     content.Parent = mainFrame
 
+    -- Funções auxiliares
+    local function createSectionIcon(parent, emoji, color)
+        local iconBg = Instance.new("Frame")
+        iconBg.Size = UDim2.new(0, 20, 0, 20)
+        iconBg.Position = UDim2.new(0, 0, 0, 1)
+        iconBg.BackgroundColor3 = color
+        iconBg.BackgroundTransparency = 0.75
+        iconBg.BorderSizePixel = 0
+        iconBg.Parent = parent
+
+        local iconBgCorner = Instance.new("UICorner")
+        iconBgCorner.CornerRadius = UDim.new(1, 0)
+        iconBgCorner.Parent = iconBg
+
+        local iconBgStroke = Instance.new("UIStroke")
+        iconBgStroke.Thickness = 1
+        iconBgStroke.Color = color
+        iconBgStroke.Transparency = 0.5
+        iconBgStroke.Parent = iconBg
+
+        local iconLabel = Instance.new("TextLabel")
+        iconLabel.Size = UDim2.new(1, 0, 1, 0)
+        iconLabel.BackgroundTransparency = 1
+        iconLabel.Text = emoji
+        iconLabel.TextColor3 = color
+        iconLabel.TextSize = 11
+        iconLabel.Font = Enum.Font.GothamBold
+        iconLabel.TextXAlignment = Enum.TextXAlignment.Center
+        iconLabel.TextYAlignment = Enum.TextYAlignment.Center
+        iconLabel.Parent = iconBg
+    end
+
+    local function createAccentBar(parent, color)
+        local bar = Instance.new("Frame")
+        bar.Size = UDim2.new(0, 3, 0, 20)
+        bar.Position = UDim2.new(0, 0, 0, 2)
+        bar.BackgroundColor3 = color
+        bar.BorderSizePixel = 0
+        bar.Parent = parent
+
+        local barCorner = Instance.new("UICorner")
+        barCorner.CornerRadius = UDim.new(0, 2)
+        barCorner.Parent = bar
+
+        local barGlow = Instance.new("UIStroke")
+        barGlow.Thickness = 4
+        barGlow.Color = color
+        barGlow.Transparency = 0.75
+        barGlow.Parent = bar
+
+        task.spawn(function()
+            while gui.Parent do
+                TweenService:Create(barGlow, TweenInfo.new(1.2), {Transparency = 0.9}):Play()
+                task.wait(1.2)
+                TweenService:Create(barGlow, TweenInfo.new(1.2), {Transparency = 0.6}):Play()
+                task.wait(1.2)
+            end
+        end)
+    end
+
     -- ============================================
     -- SEÇÃO VELOCIDADE
     -- ============================================
@@ -1250,22 +1354,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedSection.BackgroundTransparency = 1
     speedSection.Parent = content
 
-    local speedAccentBar = Instance.new("Frame")
-    speedAccentBar.Size = UDim2.new(0, 3, 0, 20)
-    speedAccentBar.Position = UDim2.new(0, 0, 0, 2)
-    speedAccentBar.BackgroundColor3 = theme.accent
-    speedAccentBar.BorderSizePixel = 0
-    speedAccentBar.Parent = speedSection
-
-    local speedAccentCorner = Instance.new("UICorner")
-    speedAccentCorner.CornerRadius = UDim.new(0, 2)
-    speedAccentCorner.Parent = speedAccentBar
-
-    local speedAccentGlow = Instance.new("UIStroke")
-    speedAccentGlow.Thickness = 4
-    speedAccentGlow.Color = theme.accent
-    speedAccentGlow.Transparency = 0.75
-    speedAccentGlow.Parent = speedAccentBar
+    createAccentBar(speedSection, theme.accent)
 
     local speedTitleContainer = Instance.new("Frame")
     speedTitleContainer.Size = UDim2.new(1, -12, 0, 22)
@@ -1273,20 +1362,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedTitleContainer.BackgroundTransparency = 1
     speedTitleContainer.Parent = speedSection
 
-    local speedTitleIcon = Instance.new("TextLabel")
-    speedTitleIcon.Size = UDim2.new(0, 18, 1, 0)
-    speedTitleIcon.BackgroundTransparency = 1
-    speedTitleIcon.Text = "⚡"
-    speedTitleIcon.TextColor3 = theme.accent
-    speedTitleIcon.TextSize = 14
-    speedTitleIcon.Font = Enum.Font.GothamBold
-    speedTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
-    speedTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
-    speedTitleIcon.Parent = speedTitleContainer
+    createSectionIcon(speedTitleContainer, "⚡", theme.accent)
 
     local speedTitle = Instance.new("TextLabel")
-    speedTitle.Size = UDim2.new(1, -22, 1, 0)
-    speedTitle.Position = UDim2.new(0, 22, 0, 0)
+    speedTitle.Size = UDim2.new(1, -30, 1, 0)
+    speedTitle.Position = UDim2.new(0, 28, 0, 0)
     speedTitle.BackgroundTransparency = 1
     speedTitle.Text = "VELOCIDADE"
     speedTitle.TextColor3 = theme.textSecondary
@@ -1310,9 +1390,22 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local displayStroke = Instance.new("UIStroke")
     displayStroke.Thickness = 1
-    displayStroke.Color = theme.border
-    displayStroke.Transparency = 0.3
+    displayStroke.Color = theme.accent
+    displayStroke.Transparency = 0.5
     displayStroke.Parent = speedDisplay
+
+    local innerGlow = Instance.new("Frame")
+    innerGlow.Size = UDim2.new(1, -4, 1, -4)
+    innerGlow.Position = UDim2.new(0, 2, 0, 2)
+    innerGlow.BackgroundColor3 = theme.accent
+    innerGlow.BackgroundTransparency = 0.94
+    innerGlow.BorderSizePixel = 0
+    innerGlow.ZIndex = 0
+    innerGlow.Parent = speedDisplay
+
+    local innerGlowCorner = Instance.new("UICorner")
+    innerGlowCorner.CornerRadius = UDim.new(0, 8)
+    innerGlowCorner.Parent = innerGlow
 
     local speedValue = Instance.new("TextLabel")
     speedValue.Size = UDim2.new(1, 0, 0.6, 0)
@@ -1324,6 +1417,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedValue.Font = Enum.Font.GothamBold
     speedValue.TextXAlignment = Enum.TextXAlignment.Center
     speedValue.TextYAlignment = Enum.TextYAlignment.Bottom
+    speedValue.ZIndex = 2
     speedValue.Parent = speedDisplay
 
     local speedUnit = Instance.new("TextLabel")
@@ -1336,6 +1430,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedUnit.Font = Enum.Font.Gotham
     speedUnit.TextXAlignment = Enum.TextXAlignment.Center
     speedUnit.TextYAlignment = Enum.TextYAlignment.Top
+    speedUnit.ZIndex = 2
     speedUnit.Parent = speedDisplay
 
     local sliderContainer = Instance.new("Frame")
@@ -1397,6 +1492,12 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     })
     fillGrad.Parent = sliderFill
 
+    local fillGlow = Instance.new("UIStroke")
+    fillGlow.Thickness = 2
+    fillGlow.Color = theme.accent
+    fillGlow.Transparency = 0.6
+    fillGlow.Parent = sliderFill
+
     local sliderButton = Instance.new("TextButton")
     sliderButton.Size = UDim2.new(0, 13, 0, 13)
     sliderButton.Position = UDim2.new(0, 0, 0.5, -6.5)
@@ -1438,26 +1539,18 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     toggleCorner.CornerRadius = UDim.new(0, 8)
     toggleCorner.Parent = speedToggleBtn
 
-    local divider1 = Instance.new("Frame")
-    divider1.Size = UDim2.new(1, 0, 0, 1)
-    divider1.Position = UDim2.new(0, 0, 0, 136)
-    divider1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    divider1.BackgroundTransparency = 0.5
-    divider1.BorderSizePixel = 0
-    divider1.Parent = content
+    speedToggleBtn.MouseEnter:Connect(function()
+        if speedToggleBtn.Text == "OFF" then
+            TweenService:Create(speedToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.05}):Play()
+        end
+    end)
+    speedToggleBtn.MouseLeave:Connect(function()
+        if speedToggleBtn.Text == "OFF" then
+            TweenService:Create(speedToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.15}):Play()
+        end
+    end)
 
-    local dividerGrad1 = Instance.new("UIGradient")
-    dividerGrad1.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 1),
-        NumberSequenceKeypoint.new(0.5, 0.5),
-        NumberSequenceKeypoint.new(1, 1),
-    })
-    dividerGrad1.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, theme.border),
-        ColorSequenceKeypoint.new(0.5, theme.jumpColor),
-        ColorSequenceKeypoint.new(1, theme.border),
-    })
-    dividerGrad1.Parent = divider1
+    -- (Divisória removida aqui)
 
     -- ============================================
     -- SEÇÃO PULO
@@ -1468,22 +1561,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     jumpSection.BackgroundTransparency = 1
     jumpSection.Parent = content
 
-    local jumpAccentBar = Instance.new("Frame")
-    jumpAccentBar.Size = UDim2.new(0, 3, 0, 20)
-    jumpAccentBar.Position = UDim2.new(0, 0, 0, 2)
-    jumpAccentBar.BackgroundColor3 = theme.jumpColor
-    jumpAccentBar.BorderSizePixel = 0
-    jumpAccentBar.Parent = jumpSection
-
-    local jumpAccentCorner = Instance.new("UICorner")
-    jumpAccentCorner.CornerRadius = UDim.new(0, 2)
-    jumpAccentCorner.Parent = jumpAccentBar
-
-    local jumpAccentGlow = Instance.new("UIStroke")
-    jumpAccentGlow.Thickness = 4
-    jumpAccentGlow.Color = theme.jumpColor
-    jumpAccentGlow.Transparency = 0.75
-    jumpAccentGlow.Parent = jumpAccentBar
+    createAccentBar(jumpSection, theme.jumpColor)
 
     local jumpTitleContainer = Instance.new("Frame")
     jumpTitleContainer.Size = UDim2.new(1, -12, 0, 22)
@@ -1491,20 +1569,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     jumpTitleContainer.BackgroundTransparency = 1
     jumpTitleContainer.Parent = jumpSection
 
-    local jumpTitleIcon = Instance.new("TextLabel")
-    jumpTitleIcon.Size = UDim2.new(0, 18, 1, 0)
-    jumpTitleIcon.BackgroundTransparency = 1
-    jumpTitleIcon.Text = "🚀"
-    jumpTitleIcon.TextColor3 = theme.jumpColor
-    jumpTitleIcon.TextSize = 14
-    jumpTitleIcon.Font = Enum.Font.GothamBold
-    jumpTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
-    jumpTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
-    jumpTitleIcon.Parent = jumpTitleContainer
+    createSectionIcon(jumpTitleContainer, "🚀", theme.jumpColor)
 
     local jumpTitle = Instance.new("TextLabel")
-    jumpTitle.Size = UDim2.new(1, -22, 1, 0)
-    jumpTitle.Position = UDim2.new(0, 22, 0, 0)
+    jumpTitle.Size = UDim2.new(1, -30, 1, 0)
+    jumpTitle.Position = UDim2.new(0, 28, 0, 0)
     jumpTitle.BackgroundTransparency = 1
     jumpTitle.Text = "PULO INFINITO"
     jumpTitle.TextColor3 = theme.textSecondary
@@ -1537,6 +1606,17 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     jumpBtnCorner.CornerRadius = UDim.new(0, 8)
     jumpBtnCorner.Parent = jumpToggleBtn
 
+    jumpToggleBtn.MouseEnter:Connect(function()
+        if jumpToggleBtn.Text == "OFF" then
+            TweenService:Create(jumpToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
+        end
+    end)
+    jumpToggleBtn.MouseLeave:Connect(function()
+        if jumpToggleBtn.Text == "OFF" then
+            TweenService:Create(jumpToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
+        end
+    end)
+
     local jumpStatusContainer = Instance.new("Frame")
     jumpStatusContainer.Size = UDim2.new(1, 0, 0, 16)
     jumpStatusContainer.Position = UDim2.new(0, 0, 0, 62)
@@ -1563,22 +1643,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     espSection.BackgroundTransparency = 1
     espSection.Parent = content
 
-    local espAccentBar = Instance.new("Frame")
-    espAccentBar.Size = UDim2.new(0, 3, 0, 20)
-    espAccentBar.Position = UDim2.new(0, 0, 0, 2)
-    espAccentBar.BackgroundColor3 = theme.espColor
-    espAccentBar.BorderSizePixel = 0
-    espAccentBar.Parent = espSection
-
-    local espAccentCorner = Instance.new("UICorner")
-    espAccentCorner.CornerRadius = UDim.new(0, 2)
-    espAccentCorner.Parent = espAccentBar
-
-    local espAccentGlow = Instance.new("UIStroke")
-    espAccentGlow.Thickness = 4
-    espAccentGlow.Color = theme.espColor
-    espAccentGlow.Transparency = 0.75
-    espAccentGlow.Parent = espAccentBar
+    createAccentBar(espSection, theme.espColor)
 
     local espTitleContainer = Instance.new("Frame")
     espTitleContainer.Size = UDim2.new(1, -12, 0, 22)
@@ -1586,20 +1651,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     espTitleContainer.BackgroundTransparency = 1
     espTitleContainer.Parent = espSection
 
-    local espTitleIcon = Instance.new("TextLabel")
-    espTitleIcon.Size = UDim2.new(0, 18, 1, 0)
-    espTitleIcon.BackgroundTransparency = 1
-    espTitleIcon.Text = "👁️"
-    espTitleIcon.TextColor3 = theme.espColor
-    espTitleIcon.TextSize = 14
-    espTitleIcon.Font = Enum.Font.GothamBold
-    espTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
-    espTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
-    espTitleIcon.Parent = espTitleContainer
+    createSectionIcon(espTitleContainer, "👁", theme.espColor)
 
     local espTitle = Instance.new("TextLabel")
-    espTitle.Size = UDim2.new(1, -22, 1, 0)
-    espTitle.Position = UDim2.new(0, 22, 0, 0)
+    espTitle.Size = UDim2.new(1, -30, 1, 0)
+    espTitle.Position = UDim2.new(0, 28, 0, 0)
     espTitle.BackgroundTransparency = 1
     espTitle.Text = "ESP"
     espTitle.TextColor3 = theme.textSecondary
@@ -1632,6 +1688,17 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     espBtnCorner.CornerRadius = UDim.new(0, 8)
     espBtnCorner.Parent = espToggleBtn
 
+    espToggleBtn.MouseEnter:Connect(function()
+        if espToggleBtn.Text == "OFF" then
+            TweenService:Create(espToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
+        end
+    end)
+    espToggleBtn.MouseLeave:Connect(function()
+        if espToggleBtn.Text == "OFF" then
+            TweenService:Create(espToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
+        end
+    end)
+
     local espStatusContainer = Instance.new("Frame")
     espStatusContainer.Size = UDim2.new(1, 0, 0, 16)
     espStatusContainer.Position = UDim2.new(0, 0, 0, 66)
@@ -1658,22 +1725,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipSection.BackgroundTransparency = 1
     noclipSection.Parent = content
 
-    local noclipAccentBar = Instance.new("Frame")
-    noclipAccentBar.Size = UDim2.new(0, 3, 0, 20)
-    noclipAccentBar.Position = UDim2.new(0, 0, 0, 2)
-    noclipAccentBar.BackgroundColor3 = theme.noclipColor
-    noclipAccentBar.BorderSizePixel = 0
-    noclipAccentBar.Parent = noclipSection
-
-    local noclipAccentCorner = Instance.new("UICorner")
-    noclipAccentCorner.CornerRadius = UDim.new(0, 2)
-    noclipAccentCorner.Parent = noclipAccentBar
-
-    local noclipAccentGlow = Instance.new("UIStroke")
-    noclipAccentGlow.Thickness = 4
-    noclipAccentGlow.Color = theme.noclipColor
-    noclipAccentGlow.Transparency = 0.75
-    noclipAccentGlow.Parent = noclipAccentBar
+    createAccentBar(noclipSection, theme.noclipColor)
 
     local noclipTitleContainer = Instance.new("Frame")
     noclipTitleContainer.Size = UDim2.new(1, -12, 0, 22)
@@ -1681,20 +1733,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipTitleContainer.BackgroundTransparency = 1
     noclipTitleContainer.Parent = noclipSection
 
-    local noclipTitleIcon = Instance.new("TextLabel")
-    noclipTitleIcon.Size = UDim2.new(0, 18, 1, 0)
-    noclipTitleIcon.BackgroundTransparency = 1
-    noclipTitleIcon.Text = "👻"
-    noclipTitleIcon.TextColor3 = theme.noclipColor
-    noclipTitleIcon.TextSize = 14
-    noclipTitleIcon.Font = Enum.Font.GothamBold
-    noclipTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
-    noclipTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
-    noclipTitleIcon.Parent = noclipTitleContainer
+    createSectionIcon(noclipTitleContainer, "👻", theme.noclipColor)
 
     local noclipTitle = Instance.new("TextLabel")
-    noclipTitle.Size = UDim2.new(1, -22, 1, 0)
-    noclipTitle.Position = UDim2.new(0, 22, 0, 0)
+    noclipTitle.Size = UDim2.new(1, -30, 1, 0)
+    noclipTitle.Position = UDim2.new(0, 28, 0, 0)
     noclipTitle.BackgroundTransparency = 1
     noclipTitle.Text = "NOCLIP"
     noclipTitle.TextColor3 = theme.textSecondary
@@ -1727,6 +1770,17 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipBtnCorner.CornerRadius = UDim.new(0, 8)
     noclipBtnCorner.Parent = noclipToggleBtn
 
+    noclipToggleBtn.MouseEnter:Connect(function()
+        if noclipToggleBtn.Text == "OFF" then
+            TweenService:Create(noclipToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
+        end
+    end)
+    noclipToggleBtn.MouseLeave:Connect(function()
+        if noclipToggleBtn.Text == "OFF" then
+            TweenService:Create(noclipToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
+        end
+    end)
+
     local noclipStatusContainer = Instance.new("Frame")
     noclipStatusContainer.Size = UDim2.new(1, 0, 0, 16)
     noclipStatusContainer.Position = UDim2.new(0, 0, 0, 66)
@@ -1753,22 +1807,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoPresserSection.BackgroundTransparency = 1
     autoPresserSection.Parent = content
 
-    local autoPresserAccentBar = Instance.new("Frame")
-    autoPresserAccentBar.Size = UDim2.new(0, 3, 0, 20)
-    autoPresserAccentBar.Position = UDim2.new(0, 0, 0, 2)
-    autoPresserAccentBar.BackgroundColor3 = theme.autoPresserColor
-    autoPresserAccentBar.BorderSizePixel = 0
-    autoPresserAccentBar.Parent = autoPresserSection
-
-    local autoPresserAccentCorner = Instance.new("UICorner")
-    autoPresserAccentCorner.CornerRadius = UDim.new(0, 2)
-    autoPresserAccentCorner.Parent = autoPresserAccentBar
-
-    local autoPresserAccentGlow = Instance.new("UIStroke")
-    autoPresserAccentGlow.Thickness = 4
-    autoPresserAccentGlow.Color = theme.autoPresserColor
-    autoPresserAccentGlow.Transparency = 0.75
-    autoPresserAccentGlow.Parent = autoPresserAccentBar
+    createAccentBar(autoPresserSection, theme.autoPresserColor)
 
     local autoPresserTitleContainer = Instance.new("Frame")
     autoPresserTitleContainer.Size = UDim2.new(1, -12, 0, 22)
@@ -1776,20 +1815,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoPresserTitleContainer.BackgroundTransparency = 1
     autoPresserTitleContainer.Parent = autoPresserSection
 
-    local autoPresserTitleIcon = Instance.new("TextLabel")
-    autoPresserTitleIcon.Size = UDim2.new(0, 18, 1, 0)
-    autoPresserTitleIcon.BackgroundTransparency = 1
-    autoPresserTitleIcon.Text = "🖱️"
-    autoPresserTitleIcon.TextColor3 = theme.autoPresserColor
-    autoPresserTitleIcon.TextSize = 14
-    autoPresserTitleIcon.Font = Enum.Font.GothamBold
-    autoPresserTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
-    autoPresserTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
-    autoPresserTitleIcon.Parent = autoPresserTitleContainer
+    createSectionIcon(autoPresserTitleContainer, "🖱", theme.autoPresserColor)
 
     local autoPresserTitle = Instance.new("TextLabel")
-    autoPresserTitle.Size = UDim2.new(1, -22, 1, 0)
-    autoPresserTitle.Position = UDim2.new(0, 22, 0, 0)
+    autoPresserTitle.Size = UDim2.new(1, -30, 1, 0)
+    autoPresserTitle.Position = UDim2.new(0, 28, 0, 0)
     autoPresserTitle.BackgroundTransparency = 1
     autoPresserTitle.Text = "AUTO PRESSER"
     autoPresserTitle.TextColor3 = theme.textSecondary
@@ -1910,22 +1940,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxSection.BackgroundTransparency = 1
     hitboxSection.Parent = content
 
-    local hitboxAccentBar = Instance.new("Frame")
-    hitboxAccentBar.Size = UDim2.new(0, 3, 0, 20)
-    hitboxAccentBar.Position = UDim2.new(0, 0, 0, 2)
-    hitboxAccentBar.BackgroundColor3 = theme.hitboxColor
-    hitboxAccentBar.BorderSizePixel = 0
-    hitboxAccentBar.Parent = hitboxSection
-
-    local hitboxAccentCorner = Instance.new("UICorner")
-    hitboxAccentCorner.CornerRadius = UDim.new(0, 2)
-    hitboxAccentCorner.Parent = hitboxAccentBar
-
-    local hitboxAccentGlow = Instance.new("UIStroke")
-    hitboxAccentGlow.Thickness = 4
-    hitboxAccentGlow.Color = theme.hitboxColor
-    hitboxAccentGlow.Transparency = 0.75
-    hitboxAccentGlow.Parent = hitboxAccentBar
+    createAccentBar(hitboxSection, theme.hitboxColor)
 
     local hitboxTitleContainer = Instance.new("Frame")
     hitboxTitleContainer.Size = UDim2.new(1, -12, 0, 22)
@@ -1933,20 +1948,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxTitleContainer.BackgroundTransparency = 1
     hitboxTitleContainer.Parent = hitboxSection
 
-    local hitboxTitleIcon = Instance.new("TextLabel")
-    hitboxTitleIcon.Size = UDim2.new(0, 18, 1, 0)
-    hitboxTitleIcon.BackgroundTransparency = 1
-    hitboxTitleIcon.Text = "🎯"
-    hitboxTitleIcon.TextColor3 = theme.hitboxColor
-    hitboxTitleIcon.TextSize = 14
-    hitboxTitleIcon.Font = Enum.Font.GothamBold
-    hitboxTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
-    hitboxTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
-    hitboxTitleIcon.Parent = hitboxTitleContainer
+    createSectionIcon(hitboxTitleContainer, "🎯", theme.hitboxColor)
 
     local hitboxTitle = Instance.new("TextLabel")
-    hitboxTitle.Size = UDim2.new(1, -22, 1, 0)
-    hitboxTitle.Position = UDim2.new(0, 22, 0, 0)
+    hitboxTitle.Size = UDim2.new(1, -30, 1, 0)
+    hitboxTitle.Position = UDim2.new(0, 28, 0, 0)
     hitboxTitle.BackgroundTransparency = 1
     hitboxTitle.Text = "HITBOX EXPANDER"
     hitboxTitle.TextColor3 = theme.textSecondary
@@ -2003,7 +2009,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     xOverlay1.BorderSizePixel = 0
     xOverlay1.Rotation = 45
     xOverlay1.ZIndex = 3
-    xOverlay1.Visible = true
     xOverlay1.Parent = hitboxViewBtn
 
     local xOverlay1Corner = Instance.new("UICorner")
@@ -2017,7 +2022,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     xOverlay2.BorderSizePixel = 0
     xOverlay2.Rotation = -45
     xOverlay2.ZIndex = 3
-    xOverlay2.Visible = true
     xOverlay2.Parent = hitboxViewBtn
 
     local xOverlay2Corner = Instance.new("UICorner")
@@ -2050,22 +2054,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flySection.BackgroundTransparency = 1
     flySection.Parent = content
 
-    local flyAccentBar = Instance.new("Frame")
-    flyAccentBar.Size = UDim2.new(0, 3, 0, 20)
-    flyAccentBar.Position = UDim2.new(0, 0, 0, 2)
-    flyAccentBar.BackgroundColor3 = theme.flyColor
-    flyAccentBar.BorderSizePixel = 0
-    flyAccentBar.Parent = flySection
-
-    local flyAccentCorner = Instance.new("UICorner")
-    flyAccentCorner.CornerRadius = UDim.new(0, 2)
-    flyAccentCorner.Parent = flyAccentBar
-
-    local flyAccentGlow = Instance.new("UIStroke")
-    flyAccentGlow.Thickness = 4
-    flyAccentGlow.Color = theme.flyColor
-    flyAccentGlow.Transparency = 0.75
-    flyAccentGlow.Parent = flyAccentBar
+    createAccentBar(flySection, theme.flyColor)
 
     local flyTitleContainer = Instance.new("Frame")
     flyTitleContainer.Size = UDim2.new(1, -12, 0, 22)
@@ -2073,20 +2062,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyTitleContainer.BackgroundTransparency = 1
     flyTitleContainer.Parent = flySection
 
-    local flyTitleIcon = Instance.new("TextLabel")
-    flyTitleIcon.Size = UDim2.new(0, 18, 1, 0)
-    flyTitleIcon.BackgroundTransparency = 1
-    flyTitleIcon.Text = "✈️"
-    flyTitleIcon.TextColor3 = theme.flyColor
-    flyTitleIcon.TextSize = 14
-    flyTitleIcon.Font = Enum.Font.GothamBold
-    flyTitleIcon.TextXAlignment = Enum.TextXAlignment.Center
-    flyTitleIcon.TextYAlignment = Enum.TextYAlignment.Center
-    flyTitleIcon.Parent = flyTitleContainer
+    createSectionIcon(flyTitleContainer, "✈", theme.flyColor)
 
     local flyTitle = Instance.new("TextLabel")
-    flyTitle.Size = UDim2.new(1, -22, 1, 0)
-    flyTitle.Position = UDim2.new(0, 22, 0, 0)
+    flyTitle.Size = UDim2.new(1, -30, 1, 0)
+    flyTitle.Position = UDim2.new(0, 28, 0, 0)
     flyTitle.BackgroundTransparency = 1
     flyTitle.Text = "FLY"
     flyTitle.TextColor3 = theme.textSecondary
@@ -2110,8 +2090,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local flyDisplayStroke = Instance.new("UIStroke")
     flyDisplayStroke.Thickness = 1
-    flyDisplayStroke.Color = theme.border
-    flyDisplayStroke.Transparency = 0.3
+    flyDisplayStroke.Color = theme.flyColor
+    flyDisplayStroke.Transparency = 0.5
     flyDisplayStroke.Parent = flySpeedDisplay
 
     local flySpeedValue = Instance.new("TextLabel")
@@ -2190,6 +2170,12 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyFillCorner.CornerRadius = UDim.new(1, 0)
     flyFillCorner.Parent = flySliderFill
 
+    local flyFillGlow = Instance.new("UIStroke")
+    flyFillGlow.Thickness = 2
+    flyFillGlow.Color = theme.flyColor
+    flyFillGlow.Transparency = 0.6
+    flyFillGlow.Parent = flySliderFill
+
     local flySliderButton = Instance.new("TextButton")
     flySliderButton.Size = UDim2.new(0, 11, 0, 11)
     flySliderButton.Position = UDim2.new(0, 0, 0.5, -5.5)
@@ -2231,6 +2217,17 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyBtnCorner.CornerRadius = UDim.new(0, 8)
     flyBtnCorner.Parent = flyToggleBtn
 
+    flyToggleBtn.MouseEnter:Connect(function()
+        if flyToggleBtn.Text == "OFF" then
+            TweenService:Create(flyToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
+        end
+    end)
+    flyToggleBtn.MouseLeave:Connect(function()
+        if flyToggleBtn.Text == "OFF" then
+            TweenService:Create(flyToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
+        end
+    end)
+
     local flyStatusContainer = Instance.new("Frame")
     flyStatusContainer.Size = UDim2.new(1, 0, 0, 16)
     flyStatusContainer.Position = UDim2.new(0, 0, 0, 116)
@@ -2247,15 +2244,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
     flyStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
     flyStatusLabel.Parent = flyStatusContainer
-
-    -- ============================================
-    -- ESPAÇO EXTRA
-    -- ============================================
-    local bottomSpacer = Instance.new("Frame")
-    bottomSpacer.Size = UDim2.new(1, 0, 0, 15)
-    bottomSpacer.Position = UDim2.new(0, 0, 0, 735)
-    bottomSpacer.BackgroundTransparency = 1
-    bottomSpacer.Parent = content
 
     -- ============================================
     -- LÓGICA DOS SLIDERS
@@ -2301,6 +2289,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     sliderButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             speedDragging = true
+            TweenService:Create(buttonStroke, TweenInfo.new(0.15), {Thickness = 4}):Play()
             speedDragConnection = UIS.InputChanged:Connect(function(moveInput)
                 if (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) and speedDragging then
                     setSpeedValueFromInput(moveInput.Position.X)
@@ -2309,6 +2298,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             speedReleaseConnection = UIS.InputEnded:Connect(function(endInput)
                 if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
                     speedDragging = false
+                    TweenService:Create(buttonStroke, TweenInfo.new(0.15), {Thickness = 3}):Play()
                     if speedDragConnection then speedDragConnection:Disconnect() speedDragConnection = nil end
                     if speedReleaseConnection then speedReleaseConnection:Disconnect() speedReleaseConnection = nil end
                 end
@@ -2363,6 +2353,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flySliderButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             flyDragging = true
+            TweenService:Create(flyButtonStroke, TweenInfo.new(0.15), {Thickness = 4}):Play()
             flyDragConnection = UIS.InputChanged:Connect(function(moveInput)
                 if (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) and flyDragging then
                     setFlyValueFromInput(moveInput.Position.X)
@@ -2371,6 +2362,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             flyReleaseConnection = UIS.InputEnded:Connect(function(endInput)
                 if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
                     flyDragging = false
+                    TweenService:Create(flyButtonStroke, TweenInfo.new(0.15), {Thickness = 3}):Play()
                     if flyDragConnection then flyDragConnection:Disconnect() flyDragConnection = nil end
                     if flyReleaseConnection then flyReleaseConnection:Disconnect() flyReleaseConnection = nil end
                 end
@@ -2423,6 +2415,17 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoPresserToggleBtn.MouseButton1Click:Connect(function()
         autoPresserModule:toggle()
         updateAutoPresserStatus()
+    end)
+
+    autoPresserToggleBtn.MouseEnter:Connect(function()
+        if autoPresserToggleBtn.Text == "OFF" then
+            TweenService:Create(autoPresserToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
+        end
+    end)
+    autoPresserToggleBtn.MouseLeave:Connect(function()
+        if autoPresserToggleBtn.Text == "OFF" then
+            TweenService:Create(autoPresserToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
+        end
     end)
 
     local capturingFor = nil
@@ -2727,7 +2730,7 @@ speedModule:initialize()
 
 createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
 
-print("✅ Basic Settings Control v4.9.1 carregado!")
-print("📏 Tamanho: 240 × 830px")
-print("🎨 Melhorias visuais mantidas")
-print("🖱️ Botão de fechar agora exibe X corretamente")
+print("✅ Basic Settings Control v5.3 carregado!")
+print("🎨 Divisória removida completamente")
+print("👁️ ESP com escala dinâmica")
+print("⚡ Botão de Velocidade funcionando")
