@@ -9,6 +9,7 @@
     - Efeitos Aurora mantidos
     - Botão de fechar "X" corrigido
     - Tamanho: 240 × 830px
+    - Auto Presser com visual padronizado (v5.4)
 --]]
 
 -- ============================================
@@ -1550,8 +1551,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- (Divisória removida aqui)
-
     -- ============================================
     -- SEÇÃO PULO
     -- ============================================
@@ -2378,35 +2377,49 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     -- ============================================
     -- HANDLERS DO AUTO PRESSER
+    -- ✅ VISUAL PADRONIZADO (igual às outras seções)
     -- ============================================
     local function updateAutoPresserStatus()
         local keyT = autoPresserModule.toggleKey.Name
         local keyP = autoPresserModule.pressKey.Name
 
         if not autoPresserModule.isEnabled then
+            -- ESTADO OFF: idêntico às outras seções
             autoPresserToggleBtn.Text = "OFF"
             autoPresserToggleBtn.TextColor3 = theme.danger
             autoPresserToggleBtn.BackgroundColor3 = theme.danger
             autoPresserToggleBtn.BackgroundTransparency = 0.2
             autoPresserToggleBtn.BorderColor3 = theme.danger
+            local g = autoPresserToggleBtn:FindFirstChildOfClass("UIGradient")
+            if g then g:Destroy() end
             autoPresserStatusLabel.Text = string.format("Ativa/Desativa com [%s] • Segura [%s]", keyT, keyP)
             autoPresserStatusLabel.TextColor3 = theme.textMuted
-        elseif autoPresserModule.isHolding then
-            autoPresserToggleBtn.Text = "ON"
-            autoPresserToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            autoPresserToggleBtn.BackgroundColor3 = theme.success
-            autoPresserToggleBtn.BackgroundTransparency = 0.3
-            autoPresserToggleBtn.BorderColor3 = theme.success
-            autoPresserStatusLabel.Text = string.format("Pressione [%s] para parar • Segurando [%s]", keyT, keyP)
-            autoPresserStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
         else
+            -- ESTADO ON: idêntico às outras seções (verde + gradiente + transparência 0.15)
             autoPresserToggleBtn.Text = "ON"
             autoPresserToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             autoPresserToggleBtn.BackgroundColor3 = theme.success
-            autoPresserToggleBtn.BackgroundTransparency = 0.3
+            autoPresserToggleBtn.BackgroundTransparency = 0.15
             autoPresserToggleBtn.BorderColor3 = theme.success
-            autoPresserStatusLabel.Text = string.format("Pressione [%s] para segurar [%s]", keyT, keyP)
-            autoPresserStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+
+            local g = autoPresserToggleBtn:FindFirstChildOfClass("UIGradient")
+            if not g then
+                g = Instance.new("UIGradient")
+                g.Parent = autoPresserToggleBtn
+            end
+            g.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
+            })
+            g.Rotation = 90
+
+            if autoPresserModule.isHolding then
+                autoPresserStatusLabel.Text = string.format("Pressione [%s] para parar • Segurando [%s]", keyT, keyP)
+                autoPresserStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
+            else
+                autoPresserStatusLabel.Text = string.format("Pressione [%s] para segurar [%s]", keyT, keyP)
+                autoPresserStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+            end
         end
     end
 
@@ -2730,7 +2743,7 @@ speedModule:initialize()
 
 createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
 
-print("✅ Basic Settings Control v5.3 carregado!")
-print("🎨 Divisória removida completamente")
+print("✅ Basic Settings Control v5.4 carregado!")
+print("🎨 Auto Presser com visual padronizado")
 print("👁️ ESP com escala dinâmica")
 print("⚡ Botão de Velocidade funcionando")
