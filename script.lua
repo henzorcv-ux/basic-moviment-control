@@ -1,15 +1,15 @@
 --[[
-    Basic Settings Control v5.3
+    Basic Settings Control v1.0
     Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly
 
-    v5.3:
-    - Linha divisória com scan RGB REMOVIDA completamente
-    - ESP com escala dinâmica (v4.9.1)
-    - Botão de Velocidade corrigido
-    - Efeitos Aurora mantidos
-    - Botão de fechar "X" corrigido
+    v1.0:
+    - ESP com Highlight + Proxy (sem caixa vermelha)
+    - Auto Presser NUNCA solta a tecla ao trocar de aba/janela
+    - Auto Presser com reforço a cada 0.05s
+    - Auto Presser reconecta hold ao recuperar foco
+    - Auto Presser com visual padronizado
+    - ESP captura players novos + respawn + força bruta
     - Tamanho: 240 × 830px
-    - Auto Presser com visual padronizado (v5.4)
 --]]
 
 -- ============================================
@@ -295,6 +295,7 @@ end
 
 -- ============================================
 -- MÓDULO DE ESP (com escala dinâmica)
+-- ✅ Highlight + Proxy (sem caixa vermelha)
 -- ============================================
 
 local ESPModule = {}
@@ -374,33 +375,60 @@ function ESPModule:createESPForPlayer(targetPlayer)
     distLabel.TextYAlignment = Enum.TextYAlignment.Center
     distLabel.Parent = distGui
 
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "ESP_Chams"
-    highlight.Adornee = character
-    highlight.FillColor = Color3.fromRGB(255, 82, 82)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = character
+    -- ✅ Highlight no Character (o "bonito")
+    local highlight
+    pcall(function()
+        highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Chams"
+        highlight.Adornee = character
+        highlight.FillColor = Color3.fromRGB(255, 82, 82)
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = character
+    end)
+
+    -- ✅ HIGHLIGHT PROXY (contorna o limite de 1 Highlight por Character)
+    local proxyModel, proxyHighlight
+    pcall(function()
+        proxyModel = Instance.new("Model")
+        proxyModel.Name = "ESP_ProxyModel_" .. targetPlayer.Name
+        proxyModel.Parent = workspace
+
+        local proxyPart = Instance.new("Part")
+        proxyPart.Name = "ProxyPart"
+        proxyPart.Size = Vector3.new(4, 6, 2)
+        proxyPart.Transparency = 1
+        proxyPart.CanCollide = false
+        proxyPart.Anchored = true
+        proxyPart.CanQuery = false
+        proxyPart.CanTouch = false
+        proxyPart.Massless = true
+        proxyPart.Parent = proxyModel
+
+        proxyHighlight = Instance.new("Highlight")
+        proxyHighlight.Name = "ESP_ProxyHighlight"
+        proxyHighlight.Adornee = proxyModel
+        proxyHighlight.FillColor = Color3.fromRGB(255, 82, 82)
+        proxyHighlight.FillTransparency = 0.5
+        proxyHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        proxyHighlight.OutlineTransparency = 0
+        proxyHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        proxyHighlight.Parent = proxyModel
+    end)
 
     self.espObjects[targetPlayer] = {
         nameGui = nameGui,
         nameLabel = nameLabel,
         distGui = distGui,
         distLabel = distLabel,
-        highlight = highlight
+        highlight = highlight,
+        proxyModel = proxyModel,
+        proxyHighlight = proxyHighlight,
+        chamsCharacter = character,
+        lastForcedRecreate = tick()
     }
-
-    local charConn
-    charConn = targetPlayer.CharacterAdded:Connect(function(newChar)
-        task.wait(0.3)
-        self:removeESPForPlayer(targetPlayer)
-        if self.isEnabled then
-            self:createESPForPlayer(targetPlayer)
-        end
-    end)
-    table.insert(self.connections, charConn)
 end
 
 function ESPModule:removeESPForPlayer(targetPlayer)
@@ -410,6 +438,7 @@ function ESPModule:removeESPForPlayer(targetPlayer)
     pcall(function() if esp.nameGui then esp.nameGui:Destroy() end end)
     pcall(function() if esp.distGui then esp.distGui:Destroy() end end)
     pcall(function() if esp.highlight then esp.highlight:Destroy() end end)
+    pcall(function() if esp.proxyModel then esp.proxyModel:Destroy() end end)
 
     self.espObjects[targetPlayer] = nil
 end
@@ -421,9 +450,105 @@ function ESPModule:updateDistances()
     if not camera then return end
 
     local cfg = self.scaleConfig
+    local now = tick()
 
     for targetPlayer, esp in pairs(self.espObjects) do
         local character = targetPlayer.Character
+
+        -- ✅ Character mudou (respawn/morfose)
+        if character and esp.chamsCharacter ~= character then
+            self:removeESPForPlayer(targetPlayer)
+            self:createESPForPlayer(targetPlayer)
+            continue
+        end
+
+        if not character and esp.chamsCharacter then
+            self:removeESPForPlayer(targetPlayer)
+            continue
+        end
+
+        if character then
+            -- ✅ DESTRÓI ForceField do jogo
+            local ff = character:FindFirstChildOfClass("ForceField")
+            if ff then pcall(function() ff:Destroy() end) end
+
+            -- ✅ DESTRÓI Highlights DO JOGO (todos menos o nosso)
+            for _, obj in ipairs(character:GetChildren()) do
+                if obj:IsA("Highlight") and obj.Name ~= "ESP_Chams" then
+                    pcall(function() obj:Destroy() end)
+                end
+            end
+
+            -- ✅ PROXY: faz o proxy seguir o HRP do player
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart and esp.proxyModel then
+                local proxyPart = esp.proxyModel:FindFirstChild("ProxyPart")
+                if proxyPart then
+                    pcall(function()
+                        proxyPart.CFrame = rootPart.CFrame
+                    end)
+                end
+            end
+
+            -- ✅ FORÇA RECRIAÇÃO a cada 0.5s
+            local forceRecreate = (now - (esp.lastForcedRecreate or 0)) > 0.5
+
+            local needRecreate = forceRecreate
+            if not esp.highlight or not esp.highlight.Parent then needRecreate = true end
+            if not esp.proxyModel or not esp.proxyModel.Parent then needRecreate = true end
+
+            if needRecreate then
+                pcall(function() if esp.highlight then esp.highlight:Destroy() end end)
+                pcall(function() if esp.proxyModel then esp.proxyModel:Destroy() end end)
+
+                local nh, npm, nph
+                pcall(function()
+                    nh = Instance.new("Highlight")
+                    nh.Name = "ESP_Chams"
+                    nh.Adornee = character
+                    nh.FillColor = Color3.fromRGB(255, 82, 82)
+                    nh.FillTransparency = 0.5
+                    nh.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    nh.OutlineTransparency = 0
+                    nh.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    nh.Parent = character
+                end)
+                pcall(function()
+                    npm = Instance.new("Model")
+                    npm.Name = "ESP_ProxyModel_" .. targetPlayer.Name
+                    npm.Parent = workspace
+
+                    local pp = Instance.new("Part")
+                    pp.Name = "ProxyPart"
+                    pp.Size = Vector3.new(4, 6, 2)
+                    pp.Transparency = 1
+                    pp.CanCollide = false
+                    pp.Anchored = true
+                    pp.CanQuery = false
+                    pp.CanTouch = false
+                    pp.Massless = true
+                    pp.Parent = npm
+
+                    if rootPart then pp.CFrame = rootPart.CFrame end
+
+                    nph = Instance.new("Highlight")
+                    nph.Name = "ESP_ProxyHighlight"
+                    nph.Adornee = npm
+                    nph.FillColor = Color3.fromRGB(255, 82, 82)
+                    nph.FillTransparency = 0.5
+                    nph.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    nph.OutlineTransparency = 0
+                    nph.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    nph.Parent = npm
+                end)
+
+                esp.highlight = nh
+                esp.proxyModel = npm
+                esp.proxyHighlight = nph
+                esp.lastForcedRecreate = now
+            end
+        end
+
         local rootPart = character and character:FindFirstChild("HumanoidRootPart")
 
         if character and rootPart and esp.distLabel then
@@ -448,15 +573,31 @@ function ESPModule:enable()
     self.isEnabled = true
     self.config:set("features.esp", true)
 
+    local function ensureESPForPlayer(p)
+        if p == player then return end
+
+        if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            self:createESPForPlayer(p)
+        end
+
+        local charConn
+        charConn = p.CharacterAdded:Connect(function(newChar)
+            local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
+            if not hrp then return end
+            task.wait(0.2)
+            if not self.isEnabled then return end
+            self:removeESPForPlayer(p)
+            self:createESPForPlayer(p)
+        end)
+        table.insert(self.connections, charConn)
+    end
+
     for _, p in ipairs(Players:GetPlayers()) do
-        self:createESPForPlayer(p)
+        ensureESPForPlayer(p)
     end
 
     local addedConn = Players.PlayerAdded:Connect(function(p)
-        task.wait(1)
-        if self.isEnabled then
-            self:createESPForPlayer(p)
-        end
+        ensureESPForPlayer(p)
     end)
     table.insert(self.connections, addedConn)
 
@@ -574,6 +715,7 @@ end
 
 -- ============================================
 -- MÓDULO AUTO PRESSER
+-- ✅ v1.0: NUNCA solta a tecla ao trocar de aba
 -- ============================================
 
 local AutoPresserModule = {}
@@ -589,6 +731,7 @@ function AutoPresserModule.new(config)
     self.toggleKey = Enum.KeyCode.R
     self.keyConnection = nil
     self.reinforceThread = nil
+    self.windowFocusConn = nil
     return self
 end
 
@@ -610,14 +753,23 @@ function AutoPresserModule:_disconnectKeyToggle()
 end
 
 function AutoPresserModule:_holdKey()
-    if self.isKeyHeld then return end
-    VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
+    if self.isKeyHeld then
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
+        end)
+        return
+    end
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
+    end)
     self.isKeyHeld = true
 end
 
 function AutoPresserModule:_releaseKey()
     if not self.isKeyHeld then return end
-    VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game)
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game)
+    end)
     self.isKeyHeld = false
 end
 
@@ -625,9 +777,12 @@ function AutoPresserModule:_startReinforce()
     if self.reinforceThread then return end
     self.reinforceThread = task.spawn(function()
         while self.isHolding do
-            task.wait(0.5)
-            if self.isHolding and self.isKeyHeld then
-                VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
+            task.wait(0.05)
+            if self.isHolding then
+                pcall(function()
+                    VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
+                end)
+                self.isKeyHeld = true
             end
         end
         self.reinforceThread = nil
@@ -635,7 +790,12 @@ function AutoPresserModule:_startReinforce()
 end
 
 function AutoPresserModule:_stopReinforce()
-    self.reinforceThread = nil
+    if self.reinforceThread then
+        pcall(function()
+            task.cancel(self.reinforceThread)
+        end)
+        self.reinforceThread = nil
+    end
 end
 
 function AutoPresserModule:toggleHold()
@@ -658,11 +818,34 @@ function AutoPresserModule:toggleHold()
     end
 end
 
+function AutoPresserModule:_connectWindowFocus()
+    if self.windowFocusConn then return end
+    self.windowFocusConn = UIS.WindowFocused:Connect(function()
+        if self.isEnabled and self.isHolding then
+            task.wait(0.05)
+            if self.isHolding then
+                self:_holdKey()
+                if not self.reinforceThread then
+                    self:_startReinforce()
+                end
+            end
+        end
+    end)
+end
+
+function AutoPresserModule:_disconnectWindowFocus()
+    if self.windowFocusConn then
+        self.windowFocusConn:Disconnect()
+        self.windowFocusConn = nil
+    end
+end
+
 function AutoPresserModule:enable()
     if self.isEnabled then return end
     self.isEnabled = true
     self.config:set("features.autoPresser", true)
     self:_connectKeyToggle()
+    self:_connectWindowFocus()
     print("🖱️ Auto Presser ARMADO")
 end
 
@@ -678,6 +861,7 @@ function AutoPresserModule:disable()
     self.isEnabled = false
     self.config:set("features.autoPresser", false)
     self:_disconnectKeyToggle()
+    self:_disconnectWindowFocus()
     print("🖱️ Auto Presser DESARMADO")
 end
 
@@ -997,7 +1181,7 @@ function FlyModule:cleanupFly()
 end
 
 -- ============================================
--- DESIGN PREMIUM v5.3
+-- DESIGN PREMIUM v1.0
 -- ============================================
 
 local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
@@ -2377,14 +2561,12 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     -- ============================================
     -- HANDLERS DO AUTO PRESSER
-    -- ✅ VISUAL PADRONIZADO (igual às outras seções)
     -- ============================================
     local function updateAutoPresserStatus()
         local keyT = autoPresserModule.toggleKey.Name
         local keyP = autoPresserModule.pressKey.Name
 
         if not autoPresserModule.isEnabled then
-            -- ESTADO OFF: idêntico às outras seções
             autoPresserToggleBtn.Text = "OFF"
             autoPresserToggleBtn.TextColor3 = theme.danger
             autoPresserToggleBtn.BackgroundColor3 = theme.danger
@@ -2395,7 +2577,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             autoPresserStatusLabel.Text = string.format("Ativa/Desativa com [%s] • Segura [%s]", keyT, keyP)
             autoPresserStatusLabel.TextColor3 = theme.textMuted
         else
-            -- ESTADO ON: idêntico às outras seções (verde + gradiente + transparência 0.15)
             autoPresserToggleBtn.Text = "ON"
             autoPresserToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             autoPresserToggleBtn.BackgroundColor3 = theme.success
@@ -2743,7 +2924,7 @@ speedModule:initialize()
 
 createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
 
-print("✅ Basic Settings Control v5.4 carregado!")
-print("🎨 Auto Presser com visual padronizado")
-print("👁️ ESP com escala dinâmica")
+print("✅ Basic Settings Control v1.0 carregado!")
+print("👁️ ESP com Highlight + Proxy (sem caixa vermelha)")
+print("🖱️ Auto Presser NUNCA solta ao trocar de aba")
 print("⚡ Botão de Velocidade funcionando")
