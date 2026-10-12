@@ -3,12 +3,10 @@
     Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly
 
     v1.0:
+    - Sistema de paginação (2 páginas) com widget sempre visível
+    - Troca de página imediata
     - ESP com Highlight + Proxy (sem caixa vermelha)
-    - Auto Presser NUNCA solta a tecla ao trocar de aba/janela
-    - Auto Presser com reforço a cada 0.05s
-    - Auto Presser reconecta hold ao recuperar foco
-    - Auto Presser com visual padronizado
-    - ESP captura players novos + respawn + força bruta
+    - Auto Presser NUNCA solta a tecla ao trocar de aba
     - Tamanho: 240 × 830px
 --]]
 
@@ -76,7 +74,7 @@ function ConfigManager.new()
         speed = { value = 16, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
         features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false },
-        window = { minimized = false }
+        window = { minimized = false, currentPage = 1 }
     }
     return self
 end
@@ -102,7 +100,7 @@ function ConfigManager:set(path, value)
 end
 
 -- ============================================
--- MÓDULO DE VELOCIDADE (com proteção completa)
+-- MÓDULO DE VELOCIDADE
 -- ============================================
 
 local SpeedModule = {}
@@ -294,8 +292,7 @@ function InfiniteJumpModule:setupJumpListener()
 end
 
 -- ============================================
--- MÓDULO DE ESP (com escala dinâmica)
--- ✅ Highlight + Proxy (sem caixa vermelha)
+-- MÓDULO DE ESP
 -- ============================================
 
 local ESPModule = {}
@@ -375,7 +372,6 @@ function ESPModule:createESPForPlayer(targetPlayer)
     distLabel.TextYAlignment = Enum.TextYAlignment.Center
     distLabel.Parent = distGui
 
-    -- ✅ Highlight no Character (o "bonito")
     local highlight
     pcall(function()
         highlight = Instance.new("Highlight")
@@ -389,7 +385,6 @@ function ESPModule:createESPForPlayer(targetPlayer)
         highlight.Parent = character
     end)
 
-    -- ✅ HIGHLIGHT PROXY (contorna o limite de 1 Highlight por Character)
     local proxyModel, proxyHighlight
     pcall(function()
         proxyModel = Instance.new("Model")
@@ -455,7 +450,6 @@ function ESPModule:updateDistances()
     for targetPlayer, esp in pairs(self.espObjects) do
         local character = targetPlayer.Character
 
-        -- ✅ Character mudou (respawn/morfose)
         if character and esp.chamsCharacter ~= character then
             self:removeESPForPlayer(targetPlayer)
             self:createESPForPlayer(targetPlayer)
@@ -468,18 +462,15 @@ function ESPModule:updateDistances()
         end
 
         if character then
-            -- ✅ DESTRÓI ForceField do jogo
             local ff = character:FindFirstChildOfClass("ForceField")
             if ff then pcall(function() ff:Destroy() end) end
 
-            -- ✅ DESTRÓI Highlights DO JOGO (todos menos o nosso)
             for _, obj in ipairs(character:GetChildren()) do
                 if obj:IsA("Highlight") and obj.Name ~= "ESP_Chams" then
                     pcall(function() obj:Destroy() end)
                 end
             end
 
-            -- ✅ PROXY: faz o proxy seguir o HRP do player
             local rootPart = character:FindFirstChild("HumanoidRootPart")
             if rootPart and esp.proxyModel then
                 local proxyPart = esp.proxyModel:FindFirstChild("ProxyPart")
@@ -490,7 +481,6 @@ function ESPModule:updateDistances()
                 end
             end
 
-            -- ✅ FORÇA RECRIAÇÃO a cada 0.5s
             local forceRecreate = (now - (esp.lastForcedRecreate or 0)) > 0.5
 
             local needRecreate = forceRecreate
@@ -715,7 +705,6 @@ end
 
 -- ============================================
 -- MÓDULO AUTO PRESSER
--- ✅ v1.0: NUNCA solta a tecla ao trocar de aba
 -- ============================================
 
 local AutoPresserModule = {}
@@ -1213,7 +1202,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== CONTAINER PRINCIPAL (240 × 830) =====
+    -- ===== CONTAINER PRINCIPAL =====
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 240, 0, 830)
     mainFrame.Position = UDim2.new(0.5, -120, 0.5, -415)
@@ -1227,7 +1216,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     corner.CornerRadius = UDim.new(0, 14)
     corner.Parent = mainFrame
 
-    -- Borda Aurora com gradiente animado
     local auroraStroke = Instance.new("UIStroke")
     auroraStroke.Thickness = 2
     auroraStroke.Color = theme.accent
@@ -1255,7 +1243,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- Sombra dupla
     local shadow1 = Instance.new("Frame")
     shadow1.Size = UDim2.new(1, 30, 1, 30)
     shadow1.Position = UDim2.new(0, -15, 0, -15)
@@ -1302,7 +1289,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     gradient.Rotation = 45
     gradient.Parent = header
 
-    -- Logo com glow pulsante
     local logoBox = Instance.new("Frame")
     logoBox.Size = UDim2.new(0, 26, 0, 26)
     logoBox.Position = UDim2.new(0, 10, 0.5, -13)
@@ -1470,6 +1456,132 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     content.BackgroundTransparency = 1
     content.Parent = mainFrame
 
+    -- ============================================
+    -- PÁGINAS
+    -- ============================================
+    local page1 = Instance.new("Frame")
+    page1.Name = "Page1"
+    page1.Size = UDim2.new(1, 0, 1, 0)
+    page1.Position = UDim2.new(0, 0, 0, 0)
+    page1.BackgroundTransparency = 1
+    page1.Visible = true
+    page1.Parent = content
+
+    local page2 = Instance.new("Frame")
+    page2.Name = "Page2"
+    page2.Size = UDim2.new(1, 0, 1, 0)
+    page2.Position = UDim2.new(0, 0, 0, 0)
+    page2.BackgroundTransparency = 1
+    page2.Visible = false
+    page2.Parent = content
+
+    -- Placeholder da página 2
+    local placeholderFrame = Instance.new("Frame")
+    placeholderFrame.Size = UDim2.new(0, 180, 0, 100)
+    placeholderFrame.Position = UDim2.new(0.5, -90, 0.4, -50)
+    placeholderFrame.BackgroundColor3 = theme.surface2
+    placeholderFrame.BackgroundTransparency = 0.4
+    placeholderFrame.BorderSizePixel = 0
+    placeholderFrame.Parent = page2
+
+    local placeholderCorner = Instance.new("UICorner")
+    placeholderCorner.CornerRadius = UDim.new(0, 10)
+    placeholderCorner.Parent = placeholderFrame
+
+    local placeholderStroke = Instance.new("UIStroke")
+    placeholderStroke.Thickness = 1
+    placeholderStroke.Color = theme.surface3
+    placeholderStroke.Transparency = 0.3
+    placeholderStroke.Parent = placeholderFrame
+
+    local placeholderLabel = Instance.new("TextLabel")
+    placeholderLabel.Size = UDim2.new(1, 0, 1, 0)
+    placeholderLabel.BackgroundTransparency = 1
+    placeholderLabel.Text = "Página vazia\n(em breve...)"
+    placeholderLabel.TextColor3 = theme.textMuted
+    placeholderLabel.TextSize = 12
+    placeholderLabel.Font = Enum.Font.GothamBold
+    placeholderLabel.TextXAlignment = Enum.TextXAlignment.Center
+    placeholderLabel.TextYAlignment = Enum.TextYAlignment.Center
+    placeholderLabel.Parent = placeholderFrame
+
+    -- ============================================
+    -- WIDGET DE PAGINAÇÃO
+    -- ============================================
+    local paginationWidget = Instance.new("Frame")
+    paginationWidget.Name = "PaginationWidget"
+    paginationWidget.Size = UDim2.new(0, 76, 0, 22)
+    paginationWidget.Position = UDim2.new(1, -78, 0, -2)
+    paginationWidget.BackgroundColor3 = theme.surface2
+    paginationWidget.BackgroundTransparency = 0.3
+    paginationWidget.BorderSizePixel = 0
+    paginationWidget.ZIndex = 50
+    paginationWidget.Parent = content
+
+    local pagCorner = Instance.new("UICorner")
+    pagCorner.CornerRadius = UDim.new(0, 6)
+    pagCorner.Parent = paginationWidget
+
+    local pagStroke = Instance.new("UIStroke")
+    pagStroke.Thickness = 1
+    pagStroke.Color = theme.surface3
+    pagStroke.Transparency = 0.3
+    pagStroke.Parent = paginationWidget
+
+    local prevPageBtn = Instance.new("TextButton")
+    prevPageBtn.Size = UDim2.new(0, 20, 1, 0)
+    prevPageBtn.Position = UDim2.new(0, 0, 0, 0)
+    prevPageBtn.BackgroundTransparency = 1
+    prevPageBtn.Text = "‹"
+    prevPageBtn.TextColor3 = theme.textSecondary
+    prevPageBtn.TextSize = 14
+    prevPageBtn.Font = Enum.Font.GothamBold
+    prevPageBtn.BorderSizePixel = 0
+    prevPageBtn.ZIndex = 51
+    prevPageBtn.Parent = paginationWidget
+
+    local nextPageBtn = Instance.new("TextButton")
+    nextPageBtn.Size = UDim2.new(0, 20, 1, 0)
+    nextPageBtn.Position = UDim2.new(1, -20, 0, 0)
+    nextPageBtn.BackgroundTransparency = 1
+    nextPageBtn.Text = "›"
+    nextPageBtn.TextColor3 = theme.textSecondary
+    nextPageBtn.TextSize = 14
+    nextPageBtn.Font = Enum.Font.GothamBold
+    nextPageBtn.BorderSizePixel = 0
+    nextPageBtn.ZIndex = 51
+    nextPageBtn.Parent = paginationWidget
+
+    local pageIndicator = Instance.new("TextLabel")
+    pageIndicator.Size = UDim2.new(1, -40, 1, 0)
+    pageIndicator.Position = UDim2.new(0, 20, 0, 0)
+    pageIndicator.BackgroundTransparency = 1
+    pageIndicator.Text = "1/2"
+    pageIndicator.TextColor3 = theme.textMuted
+    pageIndicator.TextSize = 10
+    pageIndicator.Font = Enum.Font.GothamBold
+    pageIndicator.TextXAlignment = Enum.TextXAlignment.Center
+    pageIndicator.TextYAlignment = Enum.TextYAlignment.Center
+    pageIndicator.ZIndex = 51
+    pageIndicator.Parent = paginationWidget
+
+    prevPageBtn.MouseEnter:Connect(function()
+        prevPageBtn.TextColor3 = theme.text
+        TweenService:Create(pagStroke, TweenInfo.new(0.15), {Color = theme.accent}):Play()
+    end)
+    prevPageBtn.MouseLeave:Connect(function()
+        prevPageBtn.TextColor3 = theme.textSecondary
+        TweenService:Create(pagStroke, TweenInfo.new(0.15), {Color = theme.surface3}):Play()
+    end)
+    nextPageBtn.MouseEnter:Connect(function()
+        nextPageBtn.TextColor3 = theme.text
+        TweenService:Create(pagStroke, TweenInfo.new(0.15), {Color = theme.accent}):Play()
+    end)
+    nextPageBtn.MouseLeave:Connect(function()
+        nextPageBtn.TextColor3 = theme.textSecondary
+        TweenService:Create(pagStroke, TweenInfo.new(0.15), {Color = theme.surface3}):Play()
+    end)
+
     -- Funções auxiliares
     local function createSectionIcon(parent, emoji, color)
         local iconBg = Instance.new("Frame")
@@ -1537,7 +1649,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedSection.Size = UDim2.new(1, 0, 0, 132)
     speedSection.Position = UDim2.new(0, 0, 0, 0)
     speedSection.BackgroundTransparency = 1
-    speedSection.Parent = content
+    speedSection.Parent = page1
 
     createAccentBar(speedSection, theme.accent)
 
@@ -1687,8 +1799,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     sliderButton.Size = UDim2.new(0, 13, 0, 13)
     sliderButton.Position = UDim2.new(0, 0, 0.5, -6.5)
     sliderButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    sliderButton.BorderSizePixel = 0
-    sliderButton.Text = ""
+    sliderButton.BorderSizePixel = 0    sliderButton.Text = ""
     sliderButton.ZIndex = 5
     sliderButton.Parent = sliderTrack
 
@@ -1742,7 +1853,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     jumpSection.Size = UDim2.new(1, 0, 0, 80)
     jumpSection.Position = UDim2.new(0, 0, 0, 144)
     jumpSection.BackgroundTransparency = 1
-    jumpSection.Parent = content
+    jumpSection.Parent = page1
 
     createAccentBar(jumpSection, theme.jumpColor)
 
@@ -1824,7 +1935,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     espSection.Size = UDim2.new(1, 0, 0, 84)
     espSection.Position = UDim2.new(0, 0, 0, 232)
     espSection.BackgroundTransparency = 1
-    espSection.Parent = content
+    espSection.Parent = page1
 
     createAccentBar(espSection, theme.espColor)
 
@@ -1906,7 +2017,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipSection.Size = UDim2.new(1, 0, 0, 84)
     noclipSection.Position = UDim2.new(0, 0, 0, 320)
     noclipSection.BackgroundTransparency = 1
-    noclipSection.Parent = content
+    noclipSection.Parent = page1
 
     createAccentBar(noclipSection, theme.noclipColor)
 
@@ -1988,7 +2099,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoPresserSection.Size = UDim2.new(1, 0, 0, 128)
     autoPresserSection.Position = UDim2.new(0, 0, 0, 404)
     autoPresserSection.BackgroundTransparency = 1
-    autoPresserSection.Parent = content
+    autoPresserSection.Parent = page1
 
     createAccentBar(autoPresserSection, theme.autoPresserColor)
 
@@ -2121,7 +2232,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxSection.Size = UDim2.new(1, 0, 0, 84)
     hitboxSection.Position = UDim2.new(0, 0, 0, 532)
     hitboxSection.BackgroundTransparency = 1
-    hitboxSection.Parent = content
+    hitboxSection.Parent = page1
 
     createAccentBar(hitboxSection, theme.hitboxColor)
 
@@ -2235,7 +2346,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flySection.Size = UDim2.new(1, 0, 0, 116)
     flySection.Position = UDim2.new(0, 0, 0, 616)
     flySection.BackgroundTransparency = 1
-    flySection.Parent = content
+    flySection.Parent = page1
 
     createAccentBar(flySection, theme.flyColor)
 
@@ -2558,6 +2669,54 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             setFlyValueFromInput(input.Position.X)
         end
     end)
+
+    -- ============================================
+    -- SISTEMA DE PAGINAÇÃO
+    -- ============================================
+    local currentPage = 1
+    local totalPages = 2
+
+    local function updatePaginationVisuals()
+        pageIndicator.Text = currentPage .. "/" .. totalPages
+
+        if currentPage == 1 then
+            prevPageBtn.TextColor3 = Color3.fromRGB(60, 60, 75)
+            nextPageBtn.TextColor3 = theme.textSecondary
+        else
+            prevPageBtn.TextColor3 = theme.textSecondary
+            nextPageBtn.TextColor3 = Color3.fromRGB(60, 60, 75)
+        end
+    end
+
+    local function switchPage(newPage)
+        if newPage < 1 or newPage > totalPages then return end
+        if newPage == currentPage then return end
+
+        local oldPage = currentPage
+        currentPage = newPage
+
+        local currentPageFrame = (oldPage == 1) and page1 or page2
+        local targetPageFrame = (newPage == 1) and page1 or page2
+
+        currentPageFrame.Visible = false
+        targetPageFrame.Visible = true
+
+        updatePaginationVisuals()
+    end
+
+    prevPageBtn.MouseButton1Click:Connect(function()
+        if currentPage > 1 then
+            switchPage(currentPage - 1)
+        end
+    end)
+
+    nextPageBtn.MouseButton1Click:Connect(function()
+        if currentPage < totalPages then
+            switchPage(currentPage + 1)
+        end
+    end)
+
+    updatePaginationVisuals()
 
     -- ============================================
     -- HANDLERS DO AUTO PRESSER
@@ -2925,6 +3084,7 @@ speedModule:initialize()
 createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
 
 print("✅ Basic Settings Control v1.0 carregado!")
+print("📄 Sistema de paginação (2 páginas) com widget sempre visível")
 print("👁️ ESP com Highlight + Proxy (sem caixa vermelha)")
 print("🖱️ Auto Presser NUNCA solta ao trocar de aba")
 print("⚡ Botão de Velocidade funcionando")
