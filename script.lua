@@ -1511,7 +1511,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     local paginationWidget = Instance.new("Frame")
     paginationWidget.Name = "PaginationWidget"
     paginationWidget.Size = UDim2.new(0, 76, 0, 22)
-    paginationWidget.Position = UDim2.new(1, -78, 0, -2)
+    paginationWidget.Position = UDim2.new(1, -78, 0, -4)
     paginationWidget.BackgroundColor3 = theme.surface2
     paginationWidget.BackgroundTransparency = 0.3
     paginationWidget.BorderSizePixel = 0
