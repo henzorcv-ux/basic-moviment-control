@@ -1,17 +1,30 @@
 --[[
-    Basic Settings Control v1.0
-    Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly
+    Basic Settings Control v1.8
+    Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly | Aim (pág.2)
+
+    v1.8:
+    - Suavidade fixa em 0 (mira instantânea)
+    - Slider vertical agora controla o FOV (60-600px)
+    - Botão pequeno [FOV] ao lado do toggle mostra/esconde o círculo do FOV
+
+    v1.7:
+    - AIMBOT reescrito seguindo a lógica do Universal Aimbot Mobile
+
+    v1.5.1:
+    - Botão AIMBOT maior (104x34) e movido para a direita (X=26)
+
+    v1.5:
+    - Emojis/ícones e acentos restaurados
+
+    v1.4:
+    - Corrigido bug que impedia a UI de abrir
 
     v1.0:
-    - Sistema de paginação (2 páginas) com widget sempre visível
-    - Troca de página imediata
-    - ESP com Highlight + Proxy (sem caixa vermelha)
-    - Auto Presser NUNCA solta a tecla ao trocar de aba
-    - Tamanho: 240 × 830px
+    - Sistema de paginação (2 páginas)
 --]]
 
 -- ============================================
--- SERVIÇOS E BIBLIOTECAS
+-- SERVIÇOS
 -- ============================================
 
 local Players, UIS, CoreGui, RunService, VirtualUser, TweenService, VirtualInputManager = 
@@ -27,7 +40,7 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
 -- ============================================
--- SISTEMA DE EVENTOS
+-- EVENT BUS
 -- ============================================
 
 local EventBus = {}
@@ -73,7 +86,8 @@ function ConfigManager.new()
     self.data = {
         speed = { value = 16, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
-        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false },
+        aimbot = { fov = 120, targetPart = "Head", wallCheck = true },
+        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false, aimbot = false },
         window = { minimized = false, currentPage = 1 }
     }
     return self
@@ -100,7 +114,7 @@ function ConfigManager:set(path, value)
 end
 
 -- ============================================
--- MÓDULO DE VELOCIDADE
+-- MÓDULO VELOCIDADE
 -- ============================================
 
 local SpeedModule = {}
@@ -118,9 +132,7 @@ function SpeedModule.new(config)
     return self
 end
 
-function SpeedModule:initialize()
-    self:setupCharacter()
-end
+function SpeedModule:initialize() self:setupCharacter() end
 
 function SpeedModule:setupCharacter()
     self.character = player.Character or player.CharacterAdded:Wait()
@@ -132,9 +144,7 @@ function SpeedModule:setupCharacter()
         self.character, self.humanoid = character, character:WaitForChild("Humanoid")
         self.originalSpeed = self.humanoid.WalkSpeed
         self.defaultSpeed = self.originalSpeed
-        if self.isEnabled then 
-            self:enable()
-        end
+        if self.isEnabled then self:enable() end
     end)
 end
 
@@ -156,33 +166,22 @@ function SpeedModule:setSpeed(value)
     self.currentSpeed = value
     self.config:set("speed.value", value)
     self.eventBus:emit("speedChanged", value)
-    if self.isEnabled then 
-        self:applySpeed()
-    end
+    if self.isEnabled then self:applySpeed() end
 end
 
 function SpeedModule:applySpeed()
-    if self.humanoid then 
-        pcall(function() 
-            self.humanoid.WalkSpeed = self.currentSpeed 
-        end) 
-    end
+    if self.humanoid then pcall(function() self.humanoid.WalkSpeed = self.currentSpeed end) end
 end
 
 function SpeedModule:restoreDefaultSpeed()
-    if self.humanoid then 
-        pcall(function() 
-            self.humanoid.WalkSpeed = self.defaultSpeed 
-        end) 
-    end
+    if self.humanoid then pcall(function() self.humanoid.WalkSpeed = self.defaultSpeed end) end
 end
 
 function SpeedModule:startSpeedProtection()
     self:stopSpeedProtection()
     self.velocityCheckConnection = RunService.Heartbeat:Connect(function()
         if self.isEnabled and self.humanoid and self.humanoid.Parent then
-            local currentWalkSpeed = self.humanoid.WalkSpeed
-            if currentWalkSpeed ~= self.currentSpeed then
+            if self.humanoid.WalkSpeed ~= self.currentSpeed then
                 self.humanoid.WalkSpeed = self.currentSpeed
             end
         end
@@ -195,27 +194,22 @@ function SpeedModule:startSpeedProtection()
     end)
 
     if self.humanoid then
-        local humanoidMetatable = {}
-        humanoidMetatable.__index = function(table, key)
-            return rawget(table, key)
-        end
-        humanoidMetatable.__newindex = function(table, key, value)
-            if key == "WalkSpeed" and self.isEnabled then
-                rawset(table, key, self.currentSpeed)
+        local mt = {}
+        mt.__index = function(t, k) return rawget(t, k) end
+        mt.__newindex = function(t, k, v)
+            if k == "WalkSpeed" and self.isEnabled then
+                rawset(t, k, self.currentSpeed)
                 return
             end
-            rawset(table, key, value)
+            rawset(t, k, v)
         end
-        pcall(function()
-            setmetatable(self.humanoid, humanoidMetatable)
-        end)
+        pcall(function() setmetatable(self.humanoid, mt) end)
     end
 
     if self.humanoid then
         self.humanoidChangedConnection = self.humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
             if self.isEnabled and self.humanoid then
-                local currentSpeed = self.humanoid.WalkSpeed
-                if currentSpeed ~= self.currentSpeed then
+                if self.humanoid.WalkSpeed ~= self.currentSpeed then
                     self.humanoid.WalkSpeed = self.currentSpeed
                 end
             end
@@ -224,27 +218,16 @@ function SpeedModule:startSpeedProtection()
 end
 
 function SpeedModule:stopSpeedProtection()
-    if self.velocityCheckConnection then
-        self.velocityCheckConnection:Disconnect()
-        self.velocityCheckConnection = nil
-    end
-    if self.forceSpeedConnection then
-        self.forceSpeedConnection:Disconnect()
-        self.forceSpeedConnection = nil
-    end
-    if self.humanoidChangedConnection then
-        self.humanoidChangedConnection:Disconnect()
-        self.humanoidChangedConnection = nil
-    end
+    if self.velocityCheckConnection then self.velocityCheckConnection:Disconnect() self.velocityCheckConnection = nil end
+    if self.forceSpeedConnection then self.forceSpeedConnection:Disconnect() self.forceSpeedConnection = nil end
+    if self.humanoidChangedConnection then self.humanoidChangedConnection:Disconnect() self.humanoidChangedConnection = nil end
     pcall(function()
-        if self.humanoid then
-            setmetatable(self.humanoid, nil)
-        end
+        if self.humanoid then setmetatable(self.humanoid, nil) end
     end)
 end
 
 -- ============================================
--- MÓDULO DE PULO INFINITO
+-- MÓDULO PULO INFINITO
 -- ============================================
 
 local InfiniteJumpModule = {}
@@ -267,32 +250,23 @@ end
 
 function InfiniteJumpModule:disable()
     self.isEnabled = false
-    if self.jumpConnection then
-        self.jumpConnection:Disconnect()
-        self.jumpConnection = nil
-    end
+    if self.jumpConnection then self.jumpConnection:Disconnect() self.jumpConnection = nil end
     print("🚀 Pulo Infinito DESATIVADO!")
 end
 
 function InfiniteJumpModule:setupJumpListener()
-    if self.jumpConnection then
-        self.jumpConnection:Disconnect()
-        self.jumpConnection = nil
-    end
-
+    if self.jumpConnection then self.jumpConnection:Disconnect() self.jumpConnection = nil end
     self.jumpConnection = UIS.JumpRequest:Connect(function()
         if not self.isEnabled then return end
-
         local char = player.Character
         if char and char:FindFirstChildOfClass("Humanoid") then
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            char:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
         end
     end)
 end
 
 -- ============================================
--- MÓDULO DE ESP
+-- MÓDULO ESP
 -- ============================================
 
 local ESPModule = {}
@@ -305,7 +279,6 @@ function ESPModule.new(config)
     self.espObjects = {}
     self.heartbeat = nil
     self.connections = {}
-
     self.scaleConfig = {
         MIN_TEXT = 8, MAX_TEXT = 13,
         NEAR_DIST = 10, FAR_DIST = 100,
@@ -321,7 +294,6 @@ function ESPModule:createESPForPlayer(targetPlayer)
 
     local character = targetPlayer.Character
     if not character then return end
-
     local head = character:FindFirstChild("Head")
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not head or not rootPart then return end
@@ -344,7 +316,6 @@ function ESPModule:createESPForPlayer(targetPlayer)
     nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     nameLabel.TextSize = 13
     nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextScaled = false
     nameLabel.TextXAlignment = Enum.TextXAlignment.Center
     nameLabel.TextYAlignment = Enum.TextYAlignment.Center
     nameLabel.Parent = nameGui
@@ -367,7 +338,6 @@ function ESPModule:createESPForPlayer(targetPlayer)
     distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     distLabel.TextSize = 13
     distLabel.Font = Enum.Font.GothamBold
-    distLabel.TextScaled = false
     distLabel.TextXAlignment = Enum.TextXAlignment.Center
     distLabel.TextYAlignment = Enum.TextYAlignment.Center
     distLabel.Parent = distGui
@@ -414,13 +384,10 @@ function ESPModule:createESPForPlayer(targetPlayer)
     end)
 
     self.espObjects[targetPlayer] = {
-        nameGui = nameGui,
-        nameLabel = nameLabel,
-        distGui = distGui,
-        distLabel = distLabel,
+        nameGui = nameGui, nameLabel = nameLabel,
+        distGui = distGui, distLabel = distLabel,
         highlight = highlight,
-        proxyModel = proxyModel,
-        proxyHighlight = proxyHighlight,
+        proxyModel = proxyModel, proxyHighlight = proxyHighlight,
         chamsCharacter = character,
         lastForcedRecreate = tick()
     }
@@ -429,68 +396,50 @@ end
 function ESPModule:removeESPForPlayer(targetPlayer)
     local esp = self.espObjects[targetPlayer]
     if not esp then return end
-
     pcall(function() if esp.nameGui then esp.nameGui:Destroy() end end)
     pcall(function() if esp.distGui then esp.distGui:Destroy() end end)
     pcall(function() if esp.highlight then esp.highlight:Destroy() end end)
     pcall(function() if esp.proxyModel then esp.proxyModel:Destroy() end end)
-
     self.espObjects[targetPlayer] = nil
 end
 
 function ESPModule:updateDistances()
     if not self.isEnabled then return end
-
     local camera = workspace.CurrentCamera
     if not camera then return end
-
     local cfg = self.scaleConfig
     local now = tick()
 
     for targetPlayer, esp in pairs(self.espObjects) do
         local character = targetPlayer.Character
-
         if character and esp.chamsCharacter ~= character then
             self:removeESPForPlayer(targetPlayer)
             self:createESPForPlayer(targetPlayer)
             continue
         end
-
         if not character and esp.chamsCharacter then
             self:removeESPForPlayer(targetPlayer)
             continue
         end
-
         if character then
             local ff = character:FindFirstChildOfClass("ForceField")
             if ff then pcall(function() ff:Destroy() end) end
-
             for _, obj in ipairs(character:GetChildren()) do
                 if obj:IsA("Highlight") and obj.Name ~= "ESP_Chams" then
                     pcall(function() obj:Destroy() end)
                 end
             end
-
             local rootPart = character:FindFirstChild("HumanoidRootPart")
             if rootPart and esp.proxyModel then
                 local proxyPart = esp.proxyModel:FindFirstChild("ProxyPart")
-                if proxyPart then
-                    pcall(function()
-                        proxyPart.CFrame = rootPart.CFrame
-                    end)
-                end
+                if proxyPart then pcall(function() proxyPart.CFrame = rootPart.CFrame end) end
             end
-
-            local forceRecreate = (now - (esp.lastForcedRecreate or 0)) > 0.5
-
-            local needRecreate = forceRecreate
+            local needRecreate = (now - (esp.lastForcedRecreate or 0)) > 0.5
             if not esp.highlight or not esp.highlight.Parent then needRecreate = true end
             if not esp.proxyModel or not esp.proxyModel.Parent then needRecreate = true end
-
             if needRecreate then
                 pcall(function() if esp.highlight then esp.highlight:Destroy() end end)
                 pcall(function() if esp.proxyModel then esp.proxyModel:Destroy() end end)
-
                 local nh, npm, nph
                 pcall(function()
                     nh = Instance.new("Highlight")
@@ -507,7 +456,6 @@ function ESPModule:updateDistances()
                     npm = Instance.new("Model")
                     npm.Name = "ESP_ProxyModel_" .. targetPlayer.Name
                     npm.Parent = workspace
-
                     local pp = Instance.new("Part")
                     pp.Name = "ProxyPart"
                     pp.Size = Vector3.new(4, 6, 2)
@@ -518,9 +466,7 @@ function ESPModule:updateDistances()
                     pp.CanTouch = false
                     pp.Massless = true
                     pp.Parent = npm
-
                     if rootPart then pp.CFrame = rootPart.CFrame end
-
                     nph = Instance.new("Highlight")
                     nph.Name = "ESP_ProxyHighlight"
                     nph.Adornee = npm
@@ -531,25 +477,20 @@ function ESPModule:updateDistances()
                     nph.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                     nph.Parent = npm
                 end)
-
                 esp.highlight = nh
                 esp.proxyModel = npm
                 esp.proxyHighlight = nph
                 esp.lastForcedRecreate = now
             end
         end
-
         local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-
         if character and rootPart and esp.distLabel then
             local distance = (camera.CFrame.Position - rootPart.Position).Magnitude
             esp.distLabel.Text = string.format("%dm", math.floor(distance))
-
             local factor = 1 - math.clamp((distance - cfg.NEAR_DIST) / (cfg.FAR_DIST - cfg.NEAR_DIST), 0, 1)
             local newTextSize = math.floor(cfg.MIN_TEXT + (cfg.MAX_TEXT - cfg.MIN_TEXT) * factor + 0.5)
             esp.nameLabel.TextSize = newTextSize
             esp.distLabel.TextSize = newTextSize
-
             local newWidth = math.floor(cfg.MIN_WIDTH + (cfg.MAX_WIDTH - cfg.MIN_WIDTH) * factor + 0.5)
             local newHeight = math.floor(cfg.MIN_HEIGHT + (cfg.MAX_HEIGHT - cfg.MIN_HEIGHT) * factor + 0.5)
             esp.nameGui.Size = UDim2.new(0, newWidth, 0, newHeight)
@@ -563,15 +504,12 @@ function ESPModule:enable()
     self.isEnabled = true
     self.config:set("features.esp", true)
 
-    local function ensureESPForPlayer(p)
+    local function ensure(p)
         if p == player then return end
-
         if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             self:createESPForPlayer(p)
         end
-
-        local charConn
-        charConn = p.CharacterAdded:Connect(function(newChar)
+        local conn = p.CharacterAdded:Connect(function(newChar)
             local hrp = newChar:WaitForChild("HumanoidRootPart", 5)
             if not hrp then return end
             task.wait(0.2)
@@ -579,54 +517,30 @@ function ESPModule:enable()
             self:removeESPForPlayer(p)
             self:createESPForPlayer(p)
         end)
-        table.insert(self.connections, charConn)
+        table.insert(self.connections, conn)
     end
 
-    for _, p in ipairs(Players:GetPlayers()) do
-        ensureESPForPlayer(p)
-    end
+    for _, p in ipairs(Players:GetPlayers()) do ensure(p) end
+    table.insert(self.connections, Players.PlayerAdded:Connect(ensure))
+    table.insert(self.connections, Players.PlayerRemoving:Connect(function(p) self:removeESPForPlayer(p) end))
 
-    local addedConn = Players.PlayerAdded:Connect(function(p)
-        ensureESPForPlayer(p)
-    end)
-    table.insert(self.connections, addedConn)
-
-    local removingConn = Players.PlayerRemoving:Connect(function(p)
-        self:removeESPForPlayer(p)
-    end)
-    table.insert(self.connections, removingConn)
-
-    self.heartbeat = RunService.RenderStepped:Connect(function()
-        self:updateDistances()
-    end)
-
+    self.heartbeat = RunService.RenderStepped:Connect(function() self:updateDistances() end)
     print("👁️ ESP ATIVADO! (Nome + Distância + Chams)")
 end
 
 function ESPModule:disable()
     self.isEnabled = false
     self.config:set("features.esp", false)
-
-    for _, conn in ipairs(self.connections) do
-        pcall(function() conn:Disconnect() end)
-    end
+    for _, conn in ipairs(self.connections) do pcall(function() conn:Disconnect() end) end
     self.connections = {}
-
-    if self.heartbeat then
-        self.heartbeat:Disconnect()
-        self.heartbeat = nil
-    end
-
-    for targetPlayer, _ in pairs(self.espObjects) do
-        self:removeESPForPlayer(targetPlayer)
-    end
+    if self.heartbeat then self.heartbeat:Disconnect() self.heartbeat = nil end
+    for targetPlayer, _ in pairs(self.espObjects) do self:removeESPForPlayer(targetPlayer) end
     self.espObjects = {}
-
     print("👁️ ESP DESATIVADO! (Tudo removido)")
 end
 
 -- ============================================
--- MÓDULO DE NOCLIP
+-- MÓDULO NOCLIP
 -- ============================================
 
 local NoclipModule = {}
@@ -653,10 +567,7 @@ end
 function NoclipModule:disable()
     self.isEnabled = false
     self.config:set("features.noclip", false)
-    if self.connection then
-        self.connection:Disconnect()
-        self.connection = nil
-    end
+    if self.connection then self.connection:Disconnect() self.connection = nil end
     self:restoreCollision()
     print("👻 Noclip DESATIVADO - Colisão restaurada!")
 end
@@ -676,28 +587,20 @@ end
 function NoclipModule:restoreCollision()
     for _, part in ipairs(self.partsWithCollision) do
         pcall(function()
-            if part and part.Parent then
-                part.CanCollide = true
-            end
+            if part and part.Parent then part.CanCollide = true end
         end)
     end
     self.partsWithCollision = {}
 end
 
 function NoclipModule:setupNoclip()
-    if self.connection then
-        self.connection:Disconnect()
-        self.connection = nil
-    end
-
+    if self.connection then self.connection:Disconnect() self.connection = nil end
     self.connection = RunService.Stepped:Connect(function()
         if not self.isEnabled then return end
         local character = player.Character
         if character then
             for _, part in ipairs(character:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
+                if part:IsA("BasePart") then part.CanCollide = false end
             end
         end
     end)
@@ -726,39 +629,24 @@ end
 
 function AutoPresserModule:_connectKeyToggle()
     if self.keyConnection then return end
-    self.keyConnection = UIS.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == self.toggleKey and self.isEnabled then
-            self:toggleHold()
-        end
+    self.keyConnection = UIS.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == self.toggleKey and self.isEnabled then self:toggleHold() end
     end)
 end
 
 function AutoPresserModule:_disconnectKeyToggle()
-    if self.keyConnection then
-        self.keyConnection:Disconnect()
-        self.keyConnection = nil
-    end
+    if self.keyConnection then self.keyConnection:Disconnect() self.keyConnection = nil end
 end
 
 function AutoPresserModule:_holdKey()
-    if self.isKeyHeld then
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
-        end)
-        return
-    end
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
-    end)
+    pcall(function() VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game) end)
     self.isKeyHeld = true
 end
 
 function AutoPresserModule:_releaseKey()
     if not self.isKeyHeld then return end
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game)
-    end)
+    pcall(function() VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game) end)
     self.isKeyHeld = false
 end
 
@@ -768,9 +656,7 @@ function AutoPresserModule:_startReinforce()
         while self.isHolding do
             task.wait(0.05)
             if self.isHolding then
-                pcall(function()
-                    VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game)
-                end)
+                pcall(function() VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game) end)
                 self.isKeyHeld = true
             end
         end
@@ -780,16 +666,13 @@ end
 
 function AutoPresserModule:_stopReinforce()
     if self.reinforceThread then
-        pcall(function()
-            task.cancel(self.reinforceThread)
-        end)
+        pcall(function() task.cancel(self.reinforceThread) end)
         self.reinforceThread = nil
     end
 end
 
 function AutoPresserModule:toggleHold()
     if not self.isEnabled then return end
-
     if self.isHolding then
         self.isHolding = false
         self:_stopReinforce()
@@ -801,10 +684,7 @@ function AutoPresserModule:toggleHold()
         self:_startReinforce()
         print("🖱️ Auto Presser: [" .. self.pressKey.Name .. "] SEGURANDO")
     end
-
-    if self.onHoldChanged then
-        self.onHoldChanged(self.isHolding)
-    end
+    if self.onHoldChanged then self.onHoldChanged(self.isHolding) end
 end
 
 function AutoPresserModule:_connectWindowFocus()
@@ -814,19 +694,14 @@ function AutoPresserModule:_connectWindowFocus()
             task.wait(0.05)
             if self.isHolding then
                 self:_holdKey()
-                if not self.reinforceThread then
-                    self:_startReinforce()
-                end
+                if not self.reinforceThread then self:_startReinforce() end
             end
         end
     end)
 end
 
 function AutoPresserModule:_disconnectWindowFocus()
-    if self.windowFocusConn then
-        self.windowFocusConn:Disconnect()
-        self.windowFocusConn = nil
-    end
+    if self.windowFocusConn then self.windowFocusConn:Disconnect() self.windowFocusConn = nil end
 end
 
 function AutoPresserModule:enable()
@@ -840,13 +715,11 @@ end
 
 function AutoPresserModule:disable()
     if not self.isEnabled then return end
-
     if self.isHolding then
         self.isHolding = false
         self:_stopReinforce()
         self:_releaseKey()
     end
-
     self.isEnabled = false
     self.config:set("features.autoPresser", false)
     self:_disconnectKeyToggle()
@@ -855,16 +728,12 @@ function AutoPresserModule:disable()
 end
 
 function AutoPresserModule:toggle()
-    if self.isEnabled then
-        self:disable()
-    else
-        self:enable()
-    end
+    if self.isEnabled then self:disable() else self:enable() end
     return self.isEnabled
 end
 
 -- ============================================
--- MÓDULO DE HITBOX EXPANDER
+-- MÓDULO HITBOX EXPANDER
 -- ============================================
 
 local HitboxModule = {}
@@ -877,12 +746,10 @@ function HitboxModule.new(config)
     self.isViewing = false
     self.connection = nil
     self.originalSizes = {}
-
     self.HITBOX_SIZE = Vector3.new(120, 120, 120)
     self.DEFAULT_SIZE = Vector3.new(2, 2, 1)
     self.VISIBLE_TRANSPARENCY = 0.7
     self.INVISIBLE_TRANSPARENCY = 1
-
     return self
 end
 
@@ -894,47 +761,32 @@ end
 function HitboxModule:_expandHitbox(character)
     local hrp = self:_getHRP(character)
     if not hrp then return end
-
-    if not self.originalSizes[character] then
-        self.originalSizes[character] = hrp.Size
-    end
-
+    if not self.originalSizes[character] then self.originalSizes[character] = hrp.Size end
     hrp.Size = self.HITBOX_SIZE
-
-    if self.isViewing then
-        hrp.Transparency = self.VISIBLE_TRANSPARENCY
-    else
-        hrp.Transparency = self.INVISIBLE_TRANSPARENCY
-    end
+    hrp.Transparency = self.isViewing and self.VISIBLE_TRANSPARENCY or self.INVISIBLE_TRANSPARENCY
 end
 
 function HitboxModule:_restoreHitbox(character)
     local hrp = self:_getHRP(character)
     if not hrp then return end
-
     if self.originalSizes[character] then
         hrp.Size = self.originalSizes[character]
         self.originalSizes[character] = nil
     else
         hrp.Size = self.DEFAULT_SIZE
     end
-
     hrp.Transparency = 1
 end
 
 function HitboxModule:_applyToAll()
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            self:_expandHitbox(p.Character)
-        end
+        if p ~= player and p.Character then self:_expandHitbox(p.Character) end
     end
 end
 
 function HitboxModule:_restoreAll()
     for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then
-            self:_restoreHitbox(p.Character)
-        end
+        if p.Character then self:_restoreHitbox(p.Character) end
     end
     self.originalSizes = {}
 end
@@ -943,21 +795,16 @@ function HitboxModule:enable()
     if self.isEnabled then return end
     self.isEnabled = true
     self.config:set("features.hitbox", true)
-
     self:_applyToAll()
-
     self.connection = RunService.Heartbeat:Connect(function()
         if not self.isEnabled then return end
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player and p.Character then
                 local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp and hrp.Size ~= self.HITBOX_SIZE then
-                    self:_expandHitbox(p.Character)
-                end
+                if hrp and hrp.Size ~= self.HITBOX_SIZE then self:_expandHitbox(p.Character) end
             end
         end
     end)
-
     print("🎯 Hitbox Expander ATIVADO!")
 end
 
@@ -965,29 +812,19 @@ function HitboxModule:disable()
     if not self.isEnabled then return end
     self.isEnabled = false
     self.config:set("features.hitbox", false)
-
-    if self.connection then
-        self.connection:Disconnect()
-        self.connection = nil
-    end
-
+    if self.connection then self.connection:Disconnect() self.connection = nil end
     self:_restoreAll()
     print("🎯 Hitbox Expander DESATIVADO!")
 end
 
 function HitboxModule:setViewing(state)
     self.isViewing = state
-
     if self.isEnabled then
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= player and p.Character then
                 local hrp = p.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    if state then
-                        hrp.Transparency = self.VISIBLE_TRANSPARENCY
-                    else
-                        hrp.Transparency = self.INVISIBLE_TRANSPARENCY
-                    end
+                    hrp.Transparency = state and self.VISIBLE_TRANSPARENCY or self.INVISIBLE_TRANSPARENCY
                 end
             end
         end
@@ -995,7 +832,7 @@ function HitboxModule:setViewing(state)
 end
 
 -- ============================================
--- MÓDULO DE VOO (FLY)
+-- MÓDULO FLY
 -- ============================================
 
 local FlyModule = {}
@@ -1014,16 +851,13 @@ function FlyModule.new(config)
     return self
 end
 
-function FlyModule:getRealSpeed()
-    return 40 + (self.speed * 20)
-end
+function FlyModule:getRealSpeed() return 40 + (self.speed * 20) end
 
 function FlyModule:enable()
     if self.isEnabled then return end
     self.isEnabled = true
     self.isFlying = false
     self.config:set("features.fly", true)
-    self:setupFlyControls()
     self:setupKeyToggle()
     print("✈️ Fly ATIVADO! Pressione F para voar.")
 end
@@ -1033,10 +867,7 @@ function FlyModule:disable()
     self.isFlying = false
     self.config:set("features.fly", false)
     self:cleanupFly()
-    if self.fKeyConnection then
-        self.fKeyConnection:Disconnect()
-        self.fKeyConnection = nil
-    end
+    if self.fKeyConnection then self.fKeyConnection:Disconnect() self.fKeyConnection = nil end
     print("✈️ Fly DESATIVADO!")
 end
 
@@ -1047,42 +878,25 @@ end
 
 function FlyModule:toggleFly()
     if not self.isEnabled then return end
-
     self.isFlying = not self.isFlying
-
-    if self.isFlying then
-        self:startFly()
-    else
-        self:stopFly()
-    end
+    if self.isFlying then self:startFly() else self:stopFly() end
 end
 
 function FlyModule:setupKeyToggle()
-    if self.fKeyConnection then
-        self.fKeyConnection:Disconnect()
-        self.fKeyConnection = nil
-    end
-
+    if self.fKeyConnection then self.fKeyConnection:Disconnect() self.fKeyConnection = nil end
     self.fKeyConnection = UIS.InputBegan:Connect(function(input)
-        if input.KeyCode == Enum.KeyCode.F and self.isEnabled then
-            self:toggleFly()
-        end
+        if input.KeyCode == Enum.KeyCode.F and self.isEnabled then self:toggleFly() end
     end)
 end
 
 function FlyModule:startFly()
     if not self.isEnabled then return end
-
     local character = player.Character
     if not character then return end
-
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return end
-
     local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        humanoid.PlatformStand = true
-    end
+    if humanoid then humanoid.PlatformStand = true end
 
     if not self.bodyVelocity then
         self.bodyVelocity = Instance.new("BodyVelocity")
@@ -1090,7 +904,6 @@ function FlyModule:startFly()
         self.bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
         self.bodyVelocity.Parent = rootPart
     end
-
     if not self.bodyGyro then
         self.bodyGyro = Instance.new("BodyGyro")
         self.bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
@@ -1098,41 +911,30 @@ function FlyModule:startFly()
     end
 
     if #self.connections == 0 then
-        local flyConnection = RunService.RenderStepped:Connect(function()
-            if not self.isFlying or not rootPart.Parent then 
+        table.insert(self.connections, RunService.RenderStepped:Connect(function()
+            if not self.isFlying or not rootPart.Parent then
                 if self.bodyVelocity then self.bodyVelocity.Velocity = Vector3.new(0, 0, 0) end
-                return 
+                return
             end
-
             local moveDirection = Vector3.new(0, 0, 0)
-
             if UIS:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + Vector3.new(0, 0, -1) end
             if UIS:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection + Vector3.new(0, 0, 1) end
             if UIS:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection + Vector3.new(-1, 0, 0) end
             if UIS:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + Vector3.new(1, 0, 0) end
-
             if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDirection = moveDirection + Vector3.new(0, 1, 0) end
             if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then moveDirection = moveDirection + Vector3.new(0, -1, 0) end
-
-            if moveDirection.Magnitude > 0 then
-                moveDirection = moveDirection.Unit
-            end
-
+            if moveDirection.Magnitude > 0 then moveDirection = moveDirection.Unit end
             local camera = workspace.CurrentCamera
             if camera then
                 local forward = camera.CFrame.LookVector
                 local right = camera.CFrame.RightVector
                 local up = camera.CFrame.UpVector
-
                 local moveVector = (forward * -moveDirection.Z) + (right * moveDirection.X) + (up * moveDirection.Y)
                 self.bodyVelocity.Velocity = moveVector * self:getRealSpeed()
-
-                local lookAtPosition = camera.CFrame.Position + (camera.CFrame.LookVector * 100)
-                local targetCFrame = CFrame.new(rootPart.Position, lookAtPosition)
-                self.bodyGyro.CFrame = targetCFrame
+                local lookAtPos = camera.CFrame.Position + (camera.CFrame.LookVector * 100)
+                self.bodyGyro.CFrame = CFrame.new(rootPart.Position, lookAtPos)
             end
-        end)
-        table.insert(self.connections, flyConnection)
+        end))
     end
 end
 
@@ -1141,42 +943,144 @@ function FlyModule:stopFly()
     self:cleanupFly()
 end
 
-function FlyModule:setupFlyControls()
-end
-
 function FlyModule:cleanupFly()
-    for _, conn in ipairs(self.connections) do
-        conn:Disconnect()
-    end
+    for _, conn in ipairs(self.connections) do conn:Disconnect() end
     self.connections = {}
-
-    if self.bodyVelocity then
-        self.bodyVelocity:Destroy()
-        self.bodyVelocity = nil
-    end
-
-    if self.bodyGyro then
-        self.bodyGyro:Destroy()
-        self.bodyGyro = nil
-    end
-
+    if self.bodyVelocity then self.bodyVelocity:Destroy() self.bodyVelocity = nil end
+    if self.bodyGyro then self.bodyGyro:Destroy() self.bodyGyro = nil end
     local character = player.Character
     if character then
         local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.PlatformStand = false
-        end
+        if humanoid then humanoid.PlatformStand = false end
     end
 end
 
 -- ============================================
--- DESIGN PREMIUM v1.0
+-- MÓDULO AIMBOT
 -- ============================================
 
-local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
+local AimbotModule = {}
+AimbotModule.__index = AimbotModule
+
+function AimbotModule.new(config)
+    local self = setmetatable({}, AimbotModule)
+    self.config = config
+    self.isEnabled = false
+    self.connection = nil
+    self.camera = workspace.CurrentCamera
+    self.fov = config:get("aimbot.fov") or 120
+    self.targetPart = config:get("aimbot.targetPart") or "Head"
+    self.wallCheck = config:get("aimbot.wallCheck") ~= false
+    self.currentTarget = nil
+    self.onFOVChanged = nil
+    return self
+end
+
+function AimbotModule:_isVisible(part)
+    if not self.wallCheck then return true end
+    local char = player.Character
+    if not char then return false end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {char, part.Parent}
+    local result = workspace:Raycast(self.camera.CFrame.Position, part.Position - self.camera.CFrame.Position, params)
+    return result == nil
+end
+
+function AimbotModule:_getTarget()
+    local camera = self.camera
+    if not camera then return nil end
+    local viewportSize = camera.ViewportSize
+    local center = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+    local maxDist = self.fov
+    local bestTarget = nil
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == player then continue end
+        local char = p.Character
+        if not char then continue end
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then continue end
+        local part = char:FindFirstChild(self.targetPart)
+        if not part then continue end
+
+        local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+        if onScreen then
+            local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+            if dist <= maxDist and self:_isVisible(part) then
+                maxDist = dist
+                bestTarget = p
+            end
+        end
+    end
+    return bestTarget
+end
+
+function AimbotModule:_aimAt(target)
+    if not target or not target.Character then return end
+    local aimPart = target.Character:FindFirstChild(self.targetPart)
+    if not aimPart then return end
+    -- Suavidade = 0 → mira instantânea
+    self.camera.CFrame = CFrame.new(self.camera.CFrame.Position, aimPart.Position)
+end
+
+function AimbotModule:enable()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    self.config:set("features.aimbot", true)
+    self.camera = workspace.CurrentCamera
+
+    self.connection = RunService.RenderStepped:Connect(function()
+        if not self.isEnabled then return end
+        self.camera = workspace.CurrentCamera
+        if not self.camera then return end
+        local target = self:_getTarget()
+        if target then
+            self.currentTarget = target
+            self:_aimAt(target)
+        else
+            self.currentTarget = nil
+        end
+    end)
+    print("🎯 Aimbot ATIVADO! FOV: " .. self.fov .. "px")
+end
+
+function AimbotModule:disable()
+    if not self.isEnabled then return end
+    self.isEnabled = false
+    self.currentTarget = nil
+    self.config:set("features.aimbot", false)
+    if self.connection then
+        self.connection:Disconnect()
+        self.connection = nil
+    end
+    print("🎯 Aimbot DESATIVADO!")
+end
+
+function AimbotModule:toggle()
+    if self.isEnabled then self:disable() else self:enable() end
+    return self.isEnabled
+end
+
+function AimbotModule:setFOV(sliderValue)
+    -- sliderValue 1-10 → FOV 60-600 pixels
+    self.fov = math.clamp(sliderValue * 60, 60, 600)
+    self.config:set("aimbot.fov", self.fov)
+    if self.onFOVChanged then
+        self.onFOVChanged(self.fov)
+    end
+end
+
+-- ============================================
+-- UI
+-- ============================================
+
+local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule)
     local gui = Instance.new("ScreenGui")
-    gui.Name, gui.Parent = "BasicSettingsControlGUI", CoreGui
-    gui.ResetOnSpawn, gui.IgnoreGuiInset = false, true
+    gui.Name = "BasicSettingsControlGUI"
+    gui.Parent = CoreGui
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
 
     local theme = {
         background = Color3.fromRGB(18, 18, 24),
@@ -1189,8 +1093,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         success = Color3.fromRGB(0, 230, 118),
         danger = Color3.fromRGB(255, 82, 82),
         warning = Color3.fromRGB(255, 215, 0),
-        border = Color3.fromRGB(55, 55, 72),
-        shadow = Color3.fromRGB(0, 0, 0),
         accent = Color3.fromRGB(100, 180, 255),
         jumpColor = Color3.fromRGB(255, 100, 150),
         noclipColor = Color3.fromRGB(150, 100, 255),
@@ -1198,11 +1100,59 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         flyColor = Color3.fromRGB(0, 230, 255),
         espColor = Color3.fromRGB(200, 130, 255),
         autoPresserColor = Color3.fromRGB(255, 150, 60),
+        aimbotColor = Color3.fromRGB(120, 255, 160),
         gradient1 = Color3.fromRGB(100, 180, 255),
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== CONTAINER PRINCIPAL =====
+    -- ===== FOV CIRCLE (fora do painel, no centro da tela) =====
+    local fovCircle = Instance.new("Frame")
+    fovCircle.Name = "FOV_Circle"
+    fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+    fovCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+    fovCircle.BackgroundTransparency = 1
+    fovCircle.BorderSizePixel = 0
+    fovCircle.Visible = false
+    fovCircle.ZIndex = 999
+    fovCircle.Parent = gui
+
+    local fovCircleCorner = Instance.new("UICorner")
+    fovCircleCorner.CornerRadius = UDim.new(1, 0)
+    fovCircleCorner.Parent = fovCircle
+
+    local fovCircleStroke = Instance.new("UIStroke")
+    fovCircleStroke.Thickness = 2
+    fovCircleStroke.Color = theme.aimbotColor
+    fovCircleStroke.Transparency = 0.3
+    fovCircleStroke.Parent = fovCircle
+
+    local fovCenterDot = Instance.new("Frame")
+    fovCenterDot.Size = UDim2.new(0, 4, 0, 4)
+    fovCenterDot.AnchorPoint = Vector2.new(0.5, 0.5)
+    fovCenterDot.Position = UDim2.new(0.5, 0, 0.5, 0)
+    fovCenterDot.BackgroundColor3 = theme.aimbotColor
+    fovCenterDot.BackgroundTransparency = 0.3
+    fovCenterDot.BorderSizePixel = 0
+    fovCenterDot.ZIndex = 1000
+    fovCenterDot.Parent = fovCircle
+
+    local fovCenterDotCorner = Instance.new("UICorner")
+    fovCenterDotCorner.CornerRadius = UDim.new(1, 0)
+    fovCenterDotCorner.Parent = fovCenterDot
+
+    local function updateFovCircleVisual(fov)
+        local size = fov * 2
+        fovCircle.Size = UDim2.new(0, size, 0, size)
+    end
+
+    updateFovCircleVisual(aimbotModule.fov)
+
+    -- Callback: atualiza o círculo quando o FOV muda
+    aimbotModule.onFOVChanged = function(fov)
+        updateFovCircleVisual(fov)
+    end
+
+    -- ===== MAIN FRAME =====
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 240, 0, 830)
     mainFrame.Position = UDim2.new(0.5, -120, 0.5, -415)
@@ -1243,33 +1193,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    local shadow1 = Instance.new("Frame")
-    shadow1.Size = UDim2.new(1, 30, 1, 30)
-    shadow1.Position = UDim2.new(0, -15, 0, -15)
-    shadow1.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    shadow1.BackgroundTransparency = 0.7
-    shadow1.BorderSizePixel = 0
-    shadow1.ZIndex = -2
-    shadow1.Parent = mainFrame
-
-    local shadow1Corner = Instance.new("UICorner")
-    shadow1Corner.CornerRadius = UDim.new(0, 20)
-    shadow1Corner.Parent = shadow1
-
-    local shadow2 = Instance.new("Frame")
-    shadow2.Size = UDim2.new(1, 16, 1, 16)
-    shadow2.Position = UDim2.new(0, -8, 0, -8)
-    shadow2.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    shadow2.BackgroundTransparency = 0.5
-    shadow2.BorderSizePixel = 0
-    shadow2.ZIndex = -1
-    shadow2.Parent = mainFrame
-
-    local shadow2Corner = Instance.new("UICorner")
-    shadow2Corner.CornerRadius = UDim.new(0, 16)
-    shadow2Corner.Parent = shadow2
-
-    -- ===== CABEÇALHO =====
+    -- ===== HEADER =====
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 52)
     header.BackgroundColor3 = theme.surface
@@ -1323,8 +1247,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     titleIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
     titleIcon.TextSize = 15
     titleIcon.Font = Enum.Font.GothamBold
-    titleIcon.TextXAlignment = Enum.TextXAlignment.Center
-    titleIcon.TextYAlignment = Enum.TextYAlignment.Center
     titleIcon.Parent = logoBox
 
     local title = Instance.new("TextLabel")
@@ -1361,12 +1283,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     subtitle.Size = UDim2.new(0.7, 0, 0, 14)
     subtitle.Position = UDim2.new(0, 44, 0, 30)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto • Hitbox • Fly"
+    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto • Hitbox • Fly • Aim"
     subtitle.TextColor3 = theme.textSecondary
     subtitle.TextSize = 7
     subtitle.Font = Enum.Font.Gotham
     subtitle.TextXAlignment = Enum.TextXAlignment.Left
-    subtitle.TextYAlignment = Enum.TextYAlignment.Center
     subtitle.Parent = header
 
     local headerButtons = Instance.new("Frame")
@@ -1407,30 +1328,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     closeCorner.CornerRadius = UDim.new(0, 6)
     closeCorner.Parent = closeBtn
 
-    minBtn.MouseEnter:Connect(function()
-        TweenService:Create(minBtn, TweenInfo.new(0.15), {BackgroundColor3 = theme.surface3, BackgroundTransparency = 0.2}):Play()
-    end)
-    minBtn.MouseLeave:Connect(function()
-        TweenService:Create(minBtn, TweenInfo.new(0.15), {BackgroundColor3 = theme.surface2, BackgroundTransparency = 0.5}):Play()
-    end)
-    closeBtn.MouseEnter:Connect(function()
-        TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = theme.danger, BackgroundTransparency = 0.2, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-    end)
-    closeBtn.MouseLeave:Connect(function()
-        TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = theme.surface2, BackgroundTransparency = 0.5, TextColor3 = theme.textSecondary}):Play()
-    end)
-
     -- Drag
-    local dragging = false
-    local dragInput = nil
-    local dragStart = nil
-    local startPos = nil
-
-    local function updateDrag(input)
-        local delta = input.Position - dragStart
-        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-
+    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
     header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
@@ -1447,7 +1346,10 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
     UIS.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then updateDrag(input) end
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
     end)
 
     local content = Instance.new("Frame")
@@ -1456,60 +1358,21 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     content.BackgroundTransparency = 1
     content.Parent = mainFrame
 
-    -- ============================================
-    -- PÁGINAS
-    -- ============================================
+    -- ===== PAGES =====
     local page1 = Instance.new("Frame")
-    page1.Name = "Page1"
     page1.Size = UDim2.new(1, 0, 1, 0)
-    page1.Position = UDim2.new(0, 0, 0, 0)
     page1.BackgroundTransparency = 1
     page1.Visible = true
     page1.Parent = content
 
     local page2 = Instance.new("Frame")
-    page2.Name = "Page2"
     page2.Size = UDim2.new(1, 0, 1, 0)
-    page2.Position = UDim2.new(0, 0, 0, 0)
     page2.BackgroundTransparency = 1
     page2.Visible = false
     page2.Parent = content
 
-    -- Placeholder da página 2
-    local placeholderFrame = Instance.new("Frame")
-    placeholderFrame.Size = UDim2.new(0, 180, 0, 100)
-    placeholderFrame.Position = UDim2.new(0.5, -90, 0.4, -50)
-    placeholderFrame.BackgroundColor3 = theme.surface2
-    placeholderFrame.BackgroundTransparency = 0.4
-    placeholderFrame.BorderSizePixel = 0
-    placeholderFrame.Parent = page2
-
-    local placeholderCorner = Instance.new("UICorner")
-    placeholderCorner.CornerRadius = UDim.new(0, 10)
-    placeholderCorner.Parent = placeholderFrame
-
-    local placeholderStroke = Instance.new("UIStroke")
-    placeholderStroke.Thickness = 1
-    placeholderStroke.Color = theme.surface3
-    placeholderStroke.Transparency = 0.3
-    placeholderStroke.Parent = placeholderFrame
-
-    local placeholderLabel = Instance.new("TextLabel")
-    placeholderLabel.Size = UDim2.new(1, 0, 1, 0)
-    placeholderLabel.BackgroundTransparency = 1
-    placeholderLabel.Text = "Página vazia\n(em breve...)"
-    placeholderLabel.TextColor3 = theme.textMuted
-    placeholderLabel.TextSize = 12
-    placeholderLabel.Font = Enum.Font.GothamBold
-    placeholderLabel.TextXAlignment = Enum.TextXAlignment.Center
-    placeholderLabel.TextYAlignment = Enum.TextYAlignment.Center
-    placeholderLabel.Parent = placeholderFrame
-
-    -- ============================================
-    -- WIDGET DE PAGINAÇÃO
-    -- ============================================
+    -- ===== PAGINATION =====
     local paginationWidget = Instance.new("Frame")
-    paginationWidget.Name = "PaginationWidget"
     paginationWidget.Size = UDim2.new(0, 76, 0, 22)
     paginationWidget.Position = UDim2.new(1, -78, 0, -4)
     paginationWidget.BackgroundColor3 = theme.surface2
@@ -1530,13 +1393,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local prevPageBtn = Instance.new("TextButton")
     prevPageBtn.Size = UDim2.new(0, 20, 1, 0)
-    prevPageBtn.Position = UDim2.new(0, 0, 0, 0)
     prevPageBtn.BackgroundTransparency = 1
     prevPageBtn.Text = "‹"
     prevPageBtn.TextColor3 = theme.textSecondary
     prevPageBtn.TextSize = 14
     prevPageBtn.Font = Enum.Font.GothamBold
-    prevPageBtn.BorderSizePixel = 0
     prevPageBtn.ZIndex = 51
     prevPageBtn.Parent = paginationWidget
 
@@ -1548,7 +1409,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     nextPageBtn.TextColor3 = theme.textSecondary
     nextPageBtn.TextSize = 14
     nextPageBtn.Font = Enum.Font.GothamBold
-    nextPageBtn.BorderSizePixel = 0
     nextPageBtn.ZIndex = 51
     nextPageBtn.Parent = paginationWidget
 
@@ -1560,29 +1420,10 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     pageIndicator.TextColor3 = theme.textMuted
     pageIndicator.TextSize = 10
     pageIndicator.Font = Enum.Font.GothamBold
-    pageIndicator.TextXAlignment = Enum.TextXAlignment.Center
-    pageIndicator.TextYAlignment = Enum.TextYAlignment.Center
     pageIndicator.ZIndex = 51
     pageIndicator.Parent = paginationWidget
 
-    prevPageBtn.MouseEnter:Connect(function()
-        prevPageBtn.TextColor3 = theme.text
-        TweenService:Create(pagStroke, TweenInfo.new(0.15), {Color = theme.accent}):Play()
-    end)
-    prevPageBtn.MouseLeave:Connect(function()
-        prevPageBtn.TextColor3 = theme.textSecondary
-        TweenService:Create(pagStroke, TweenInfo.new(0.15), {Color = theme.surface3}):Play()
-    end)
-    nextPageBtn.MouseEnter:Connect(function()
-        nextPageBtn.TextColor3 = theme.text
-        TweenService:Create(pagStroke, TweenInfo.new(0.15), {Color = theme.accent}):Play()
-    end)
-    nextPageBtn.MouseLeave:Connect(function()
-        nextPageBtn.TextColor3 = theme.textSecondary
-        TweenService:Create(pagStroke, TweenInfo.new(0.15), {Color = theme.surface3}):Play()
-    end)
-
-    -- Funções auxiliares
+    -- Helpers
     local function createSectionIcon(parent, emoji, color)
         local iconBg = Instance.new("Frame")
         iconBg.Size = UDim2.new(0, 20, 0, 20)
@@ -1592,26 +1433,24 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         iconBg.BorderSizePixel = 0
         iconBg.Parent = parent
 
-        local iconBgCorner = Instance.new("UICorner")
-        iconBgCorner.CornerRadius = UDim.new(1, 0)
-        iconBgCorner.Parent = iconBg
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(1, 0)
+        c.Parent = iconBg
 
-        local iconBgStroke = Instance.new("UIStroke")
-        iconBgStroke.Thickness = 1
-        iconBgStroke.Color = color
-        iconBgStroke.Transparency = 0.5
-        iconBgStroke.Parent = iconBg
+        local s = Instance.new("UIStroke")
+        s.Thickness = 1
+        s.Color = color
+        s.Transparency = 0.5
+        s.Parent = iconBg
 
-        local iconLabel = Instance.new("TextLabel")
-        iconLabel.Size = UDim2.new(1, 0, 1, 0)
-        iconLabel.BackgroundTransparency = 1
-        iconLabel.Text = emoji
-        iconLabel.TextColor3 = color
-        iconLabel.TextSize = 11
-        iconLabel.Font = Enum.Font.GothamBold
-        iconLabel.TextXAlignment = Enum.TextXAlignment.Center
-        iconLabel.TextYAlignment = Enum.TextYAlignment.Center
-        iconLabel.Parent = iconBg
+        local l = Instance.new("TextLabel")
+        l.Size = UDim2.new(1, 0, 1, 0)
+        l.BackgroundTransparency = 1
+        l.Text = emoji
+        l.TextColor3 = color
+        l.TextSize = 11
+        l.Font = Enum.Font.GothamBold
+        l.Parent = iconBg
     end
 
     local function createAccentBar(parent, color)
@@ -1622,21 +1461,21 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         bar.BorderSizePixel = 0
         bar.Parent = parent
 
-        local barCorner = Instance.new("UICorner")
-        barCorner.CornerRadius = UDim.new(0, 2)
-        barCorner.Parent = bar
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, 2)
+        c.Parent = bar
 
-        local barGlow = Instance.new("UIStroke")
-        barGlow.Thickness = 4
-        barGlow.Color = color
-        barGlow.Transparency = 0.75
-        barGlow.Parent = bar
+        local g = Instance.new("UIStroke")
+        g.Thickness = 4
+        g.Color = color
+        g.Transparency = 0.75
+        g.Parent = bar
 
         task.spawn(function()
             while gui.Parent do
-                TweenService:Create(barGlow, TweenInfo.new(1.2), {Transparency = 0.9}):Play()
+                TweenService:Create(g, TweenInfo.new(1.2), {Transparency = 0.9}):Play()
                 task.wait(1.2)
-                TweenService:Create(barGlow, TweenInfo.new(1.2), {Transparency = 0.6}):Play()
+                TweenService:Create(g, TweenInfo.new(1.2), {Transparency = 0.6}):Play()
                 task.wait(1.2)
             end
         end)
@@ -1670,7 +1509,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedTitle.TextSize = 12
     speedTitle.Font = Enum.Font.GothamBold
     speedTitle.TextXAlignment = Enum.TextXAlignment.Left
-    speedTitle.TextYAlignment = Enum.TextYAlignment.Center
     speedTitle.Parent = speedTitleContainer
 
     local speedDisplay = Instance.new("Frame")
@@ -1691,50 +1529,20 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     displayStroke.Transparency = 0.5
     displayStroke.Parent = speedDisplay
 
-    local innerGlow = Instance.new("Frame")
-    innerGlow.Size = UDim2.new(1, -4, 1, -4)
-    innerGlow.Position = UDim2.new(0, 2, 0, 2)
-    innerGlow.BackgroundColor3 = theme.accent
-    innerGlow.BackgroundTransparency = 0.94
-    innerGlow.BorderSizePixel = 0
-    innerGlow.ZIndex = 0
-    innerGlow.Parent = speedDisplay
-
-    local innerGlowCorner = Instance.new("UICorner")
-    innerGlowCorner.CornerRadius = UDim.new(0, 8)
-    innerGlowCorner.Parent = innerGlow
-
     local speedValue = Instance.new("TextLabel")
-    speedValue.Size = UDim2.new(1, 0, 0.6, 0)
-    speedValue.Position = UDim2.new(0, 0, 0.1, 0)
+    speedValue.Size = UDim2.new(1, 0, 0.7, 0)
+    speedValue.Position = UDim2.new(0, 0, 0.15, 0)
     speedValue.BackgroundTransparency = 1
     speedValue.Text = "16"
     speedValue.TextColor3 = theme.accent
     speedValue.TextSize = 24
     speedValue.Font = Enum.Font.GothamBold
-    speedValue.TextXAlignment = Enum.TextXAlignment.Center
-    speedValue.TextYAlignment = Enum.TextYAlignment.Bottom
-    speedValue.ZIndex = 2
     speedValue.Parent = speedDisplay
-
-    local speedUnit = Instance.new("TextLabel")
-    speedUnit.Size = UDim2.new(1, 0, 0.3, 0)
-    speedUnit.Position = UDim2.new(0, 0, 0.65, 0)
-    speedUnit.BackgroundTransparency = 1
-    speedUnit.Text = "VEL"
-    speedUnit.TextColor3 = theme.textMuted
-    speedUnit.TextSize = 7
-    speedUnit.Font = Enum.Font.Gotham
-    speedUnit.TextXAlignment = Enum.TextXAlignment.Center
-    speedUnit.TextYAlignment = Enum.TextYAlignment.Top
-    speedUnit.ZIndex = 2
-    speedUnit.Parent = speedDisplay
 
     local sliderContainer = Instance.new("Frame")
     sliderContainer.Size = UDim2.new(1, -16, 0, 24)
     sliderContainer.Position = UDim2.new(0, 8, 0, 80)
     sliderContainer.BackgroundTransparency = 1
-    sliderContainer.ClipsDescendants = false
     sliderContainer.Parent = speedSection
 
     local minLabel = Instance.new("TextLabel")
@@ -1744,8 +1552,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     minLabel.TextColor3 = theme.textMuted
     minLabel.TextSize = 8
     minLabel.Font = Enum.Font.Gotham
-    minLabel.TextXAlignment = Enum.TextXAlignment.Center
-    minLabel.TextYAlignment = Enum.TextYAlignment.Center
     minLabel.Parent = sliderContainer
 
     local maxLabel = Instance.new("TextLabel")
@@ -1756,8 +1562,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     maxLabel.TextColor3 = theme.textMuted
     maxLabel.TextSize = 8
     maxLabel.Font = Enum.Font.Gotham
-    maxLabel.TextXAlignment = Enum.TextXAlignment.Center
-    maxLabel.TextYAlignment = Enum.TextYAlignment.Center
     maxLabel.Parent = sliderContainer
 
     local sliderTrack = Instance.new("Frame")
@@ -1765,7 +1569,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     sliderTrack.Position = UDim2.new(0, 28, 0.5, -2)
     sliderTrack.BackgroundColor3 = theme.surface3
     sliderTrack.BorderSizePixel = 0
-    sliderTrack.ClipsDescendants = false
     sliderTrack.Parent = sliderContainer
 
     local trackCorner = Instance.new("UICorner")
@@ -1782,24 +1585,12 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     fillCorner.CornerRadius = UDim.new(1, 0)
     fillCorner.Parent = sliderFill
 
-    local fillGrad = Instance.new("UIGradient")
-    fillGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, theme.accent),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 140, 255)),
-    })
-    fillGrad.Parent = sliderFill
-
-    local fillGlow = Instance.new("UIStroke")
-    fillGlow.Thickness = 2
-    fillGlow.Color = theme.accent
-    fillGlow.Transparency = 0.6
-    fillGlow.Parent = sliderFill
-
     local sliderButton = Instance.new("TextButton")
     sliderButton.Size = UDim2.new(0, 13, 0, 13)
     sliderButton.Position = UDim2.new(0, 0, 0.5, -6.5)
     sliderButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    sliderButton.BorderSizePixel = 0    sliderButton.Text = ""
+    sliderButton.BorderSizePixel = 0
+    sliderButton.Text = ""
     sliderButton.ZIndex = 5
     sliderButton.Parent = sliderTrack
 
@@ -1812,15 +1603,9 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     buttonStroke.Color = theme.accent
     buttonStroke.Parent = sliderButton
 
-    local speedToggleContainer = Instance.new("Frame")
-    speedToggleContainer.Size = UDim2.new(1, 0, 0, 38)
-    speedToggleContainer.Position = UDim2.new(0, 0, 0, 106)
-    speedToggleContainer.BackgroundTransparency = 1
-    speedToggleContainer.Parent = speedSection
-
     local speedToggleBtn = Instance.new("TextButton")
     speedToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    speedToggleBtn.Position = UDim2.new(0.5, -45, 0.5, -15)
+    speedToggleBtn.Position = UDim2.new(0.5, -45, 0, 106)
     speedToggleBtn.BackgroundColor3 = theme.danger
     speedToggleBtn.BackgroundTransparency = 0.15
     speedToggleBtn.Text = "OFF"
@@ -1829,22 +1614,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedToggleBtn.Font = Enum.Font.GothamBold
     speedToggleBtn.BorderSizePixel = 2
     speedToggleBtn.BorderColor3 = theme.danger
-    speedToggleBtn.Parent = speedToggleContainer
+    speedToggleBtn.Parent = speedSection
 
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 8)
-    toggleCorner.Parent = speedToggleBtn
-
-    speedToggleBtn.MouseEnter:Connect(function()
-        if speedToggleBtn.Text == "OFF" then
-            TweenService:Create(speedToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.05}):Play()
-        end
-    end)
-    speedToggleBtn.MouseLeave:Connect(function()
-        if speedToggleBtn.Text == "OFF" then
-            TweenService:Create(speedToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.15}):Play()
-        end
-    end)
+    local speedToggleCorner = Instance.new("UICorner")
+    speedToggleCorner.CornerRadius = UDim.new(0, 8)
+    speedToggleCorner.Parent = speedToggleBtn
 
     -- ============================================
     -- SEÇÃO PULO
@@ -1874,18 +1648,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     jumpTitle.TextSize = 12
     jumpTitle.Font = Enum.Font.GothamBold
     jumpTitle.TextXAlignment = Enum.TextXAlignment.Left
-    jumpTitle.TextYAlignment = Enum.TextYAlignment.Center
     jumpTitle.Parent = jumpTitleContainer
-
-    local jumpToggleContainer = Instance.new("Frame")
-    jumpToggleContainer.Size = UDim2.new(1, 0, 0, 34)
-    jumpToggleContainer.Position = UDim2.new(0, 0, 0, 26)
-    jumpToggleContainer.BackgroundTransparency = 1
-    jumpToggleContainer.Parent = jumpSection
 
     local jumpToggleBtn = Instance.new("TextButton")
     jumpToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    jumpToggleBtn.Position = UDim2.new(0.5, -45, 0.5, -15)
+    jumpToggleBtn.Position = UDim2.new(0.5, -45, 0, 26)
     jumpToggleBtn.BackgroundColor3 = theme.danger
     jumpToggleBtn.BackgroundTransparency = 0.2
     jumpToggleBtn.Text = "OFF"
@@ -1894,39 +1661,21 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     jumpToggleBtn.Font = Enum.Font.GothamBold
     jumpToggleBtn.BorderSizePixel = 2
     jumpToggleBtn.BorderColor3 = theme.danger
-    jumpToggleBtn.Parent = jumpToggleContainer
+    jumpToggleBtn.Parent = jumpSection
 
     local jumpBtnCorner = Instance.new("UICorner")
     jumpBtnCorner.CornerRadius = UDim.new(0, 8)
     jumpBtnCorner.Parent = jumpToggleBtn
 
-    jumpToggleBtn.MouseEnter:Connect(function()
-        if jumpToggleBtn.Text == "OFF" then
-            TweenService:Create(jumpToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
-        end
-    end)
-    jumpToggleBtn.MouseLeave:Connect(function()
-        if jumpToggleBtn.Text == "OFF" then
-            TweenService:Create(jumpToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
-        end
-    end)
-
-    local jumpStatusContainer = Instance.new("Frame")
-    jumpStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    jumpStatusContainer.Position = UDim2.new(0, 0, 0, 62)
-    jumpStatusContainer.BackgroundTransparency = 1
-    jumpStatusContainer.Parent = jumpSection
-
     local jumpStatusLabel = Instance.new("TextLabel")
-    jumpStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+    jumpStatusLabel.Size = UDim2.new(1, 0, 0, 16)
+    jumpStatusLabel.Position = UDim2.new(0, 0, 0, 62)
     jumpStatusLabel.BackgroundTransparency = 1
     jumpStatusLabel.Text = "Espaço para pular"
     jumpStatusLabel.TextColor3 = theme.textMuted
     jumpStatusLabel.TextSize = 10
     jumpStatusLabel.Font = Enum.Font.Gotham
-    jumpStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
-    jumpStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
-    jumpStatusLabel.Parent = jumpStatusContainer
+    jumpStatusLabel.Parent = jumpSection
 
     -- ============================================
     -- SEÇÃO ESP
@@ -1956,18 +1705,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     espTitle.TextSize = 12
     espTitle.Font = Enum.Font.GothamBold
     espTitle.TextXAlignment = Enum.TextXAlignment.Left
-    espTitle.TextYAlignment = Enum.TextYAlignment.Center
     espTitle.Parent = espTitleContainer
-
-    local espToggleContainer = Instance.new("Frame")
-    espToggleContainer.Size = UDim2.new(1, 0, 0, 34)
-    espToggleContainer.Position = UDim2.new(0, 0, 0, 26)
-    espToggleContainer.BackgroundTransparency = 1
-    espToggleContainer.Parent = espSection
 
     local espToggleBtn = Instance.new("TextButton")
     espToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    espToggleBtn.Position = UDim2.new(0.5, -45, 0.5, -15)
+    espToggleBtn.Position = UDim2.new(0.5, -45, 0, 26)
     espToggleBtn.BackgroundColor3 = theme.danger
     espToggleBtn.BackgroundTransparency = 0.2
     espToggleBtn.Text = "OFF"
@@ -1976,39 +1718,21 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     espToggleBtn.Font = Enum.Font.GothamBold
     espToggleBtn.BorderSizePixel = 2
     espToggleBtn.BorderColor3 = theme.danger
-    espToggleBtn.Parent = espToggleContainer
+    espToggleBtn.Parent = espSection
 
     local espBtnCorner = Instance.new("UICorner")
     espBtnCorner.CornerRadius = UDim.new(0, 8)
     espBtnCorner.Parent = espToggleBtn
 
-    espToggleBtn.MouseEnter:Connect(function()
-        if espToggleBtn.Text == "OFF" then
-            TweenService:Create(espToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
-        end
-    end)
-    espToggleBtn.MouseLeave:Connect(function()
-        if espToggleBtn.Text == "OFF" then
-            TweenService:Create(espToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
-        end
-    end)
-
-    local espStatusContainer = Instance.new("Frame")
-    espStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    espStatusContainer.Position = UDim2.new(0, 0, 0, 66)
-    espStatusContainer.BackgroundTransparency = 1
-    espStatusContainer.Parent = espSection
-
     local espStatusLabel = Instance.new("TextLabel")
-    espStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+    espStatusLabel.Size = UDim2.new(1, 0, 0, 16)
+    espStatusLabel.Position = UDim2.new(0, 0, 0, 66)
     espStatusLabel.BackgroundTransparency = 1
     espStatusLabel.Text = "Nome • Distância • Chams"
     espStatusLabel.TextColor3 = theme.textMuted
     espStatusLabel.TextSize = 10
     espStatusLabel.Font = Enum.Font.Gotham
-    espStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
-    espStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
-    espStatusLabel.Parent = espStatusContainer
+    espStatusLabel.Parent = espSection
 
     -- ============================================
     -- SEÇÃO NOCLIP
@@ -2038,18 +1762,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipTitle.TextSize = 12
     noclipTitle.Font = Enum.Font.GothamBold
     noclipTitle.TextXAlignment = Enum.TextXAlignment.Left
-    noclipTitle.TextYAlignment = Enum.TextYAlignment.Center
     noclipTitle.Parent = noclipTitleContainer
-
-    local noclipToggleContainer = Instance.new("Frame")
-    noclipToggleContainer.Size = UDim2.new(1, 0, 0, 34)
-    noclipToggleContainer.Position = UDim2.new(0, 0, 0, 26)
-    noclipToggleContainer.BackgroundTransparency = 1
-    noclipToggleContainer.Parent = noclipSection
 
     local noclipToggleBtn = Instance.new("TextButton")
     noclipToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    noclipToggleBtn.Position = UDim2.new(0.5, -45, 0.5, -15)
+    noclipToggleBtn.Position = UDim2.new(0.5, -45, 0, 26)
     noclipToggleBtn.BackgroundColor3 = theme.danger
     noclipToggleBtn.BackgroundTransparency = 0.2
     noclipToggleBtn.Text = "OFF"
@@ -2058,120 +1775,87 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipToggleBtn.Font = Enum.Font.GothamBold
     noclipToggleBtn.BorderSizePixel = 2
     noclipToggleBtn.BorderColor3 = theme.danger
-    noclipToggleBtn.Parent = noclipToggleContainer
+    noclipToggleBtn.Parent = noclipSection
 
     local noclipBtnCorner = Instance.new("UICorner")
     noclipBtnCorner.CornerRadius = UDim.new(0, 8)
     noclipBtnCorner.Parent = noclipToggleBtn
 
-    noclipToggleBtn.MouseEnter:Connect(function()
-        if noclipToggleBtn.Text == "OFF" then
-            TweenService:Create(noclipToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
-        end
-    end)
-    noclipToggleBtn.MouseLeave:Connect(function()
-        if noclipToggleBtn.Text == "OFF" then
-            TweenService:Create(noclipToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
-        end
-    end)
-
-    local noclipStatusContainer = Instance.new("Frame")
-    noclipStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    noclipStatusContainer.Position = UDim2.new(0, 0, 0, 66)
-    noclipStatusContainer.BackgroundTransparency = 1
-    noclipStatusContainer.Parent = noclipSection
-
     local noclipStatusLabel = Instance.new("TextLabel")
-    noclipStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+    noclipStatusLabel.Size = UDim2.new(1, 0, 0, 16)
+    noclipStatusLabel.Position = UDim2.new(0, 0, 0, 66)
     noclipStatusLabel.BackgroundTransparency = 1
     noclipStatusLabel.Text = "Atravesse paredes"
     noclipStatusLabel.TextColor3 = theme.textMuted
     noclipStatusLabel.TextSize = 10
     noclipStatusLabel.Font = Enum.Font.Gotham
-    noclipStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
-    noclipStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
-    noclipStatusLabel.Parent = noclipStatusContainer
+    noclipStatusLabel.Parent = noclipSection
 
     -- ============================================
     -- SEÇÃO AUTO PRESSER
     -- ============================================
-    local autoPresserSection = Instance.new("Frame")
-    autoPresserSection.Size = UDim2.new(1, 0, 0, 128)
-    autoPresserSection.Position = UDim2.new(0, 0, 0, 404)
-    autoPresserSection.BackgroundTransparency = 1
-    autoPresserSection.Parent = page1
+    local autoSection = Instance.new("Frame")
+    autoSection.Size = UDim2.new(1, 0, 0, 128)
+    autoSection.Position = UDim2.new(0, 0, 0, 404)
+    autoSection.BackgroundTransparency = 1
+    autoSection.Parent = page1
 
-    createAccentBar(autoPresserSection, theme.autoPresserColor)
+    createAccentBar(autoSection, theme.autoPresserColor)
 
-    local autoPresserTitleContainer = Instance.new("Frame")
-    autoPresserTitleContainer.Size = UDim2.new(1, -12, 0, 22)
-    autoPresserTitleContainer.Position = UDim2.new(0, 12, 0, 0)
-    autoPresserTitleContainer.BackgroundTransparency = 1
-    autoPresserTitleContainer.Parent = autoPresserSection
+    local autoTitleContainer = Instance.new("Frame")
+    autoTitleContainer.Size = UDim2.new(1, -12, 0, 22)
+    autoTitleContainer.Position = UDim2.new(0, 12, 0, 0)
+    autoTitleContainer.BackgroundTransparency = 1
+    autoTitleContainer.Parent = autoSection
 
-    createSectionIcon(autoPresserTitleContainer, "🖱", theme.autoPresserColor)
+    createSectionIcon(autoTitleContainer, "🖱", theme.autoPresserColor)
 
-    local autoPresserTitle = Instance.new("TextLabel")
-    autoPresserTitle.Size = UDim2.new(1, -30, 1, 0)
-    autoPresserTitle.Position = UDim2.new(0, 28, 0, 0)
-    autoPresserTitle.BackgroundTransparency = 1
-    autoPresserTitle.Text = "AUTO PRESSER"
-    autoPresserTitle.TextColor3 = theme.textSecondary
-    autoPresserTitle.TextSize = 12
-    autoPresserTitle.Font = Enum.Font.GothamBold
-    autoPresserTitle.TextXAlignment = Enum.TextXAlignment.Left
-    autoPresserTitle.TextYAlignment = Enum.TextYAlignment.Center
-    autoPresserTitle.Parent = autoPresserTitleContainer
+    local autoTitle = Instance.new("TextLabel")
+    autoTitle.Size = UDim2.new(1, -30, 1, 0)
+    autoTitle.Position = UDim2.new(0, 28, 0, 0)
+    autoTitle.BackgroundTransparency = 1
+    autoTitle.Text = "AUTO PRESSER"
+    autoTitle.TextColor3 = theme.textSecondary
+    autoTitle.TextSize = 12
+    autoTitle.Font = Enum.Font.GothamBold
+    autoTitle.TextXAlignment = Enum.TextXAlignment.Left
+    autoTitle.Parent = autoTitleContainer
 
-    local autoPresserToggleContainer = Instance.new("Frame")
-    autoPresserToggleContainer.Size = UDim2.new(1, 0, 0, 34)
-    autoPresserToggleContainer.Position = UDim2.new(0, 0, 0, 26)
-    autoPresserToggleContainer.BackgroundTransparency = 1
-    autoPresserToggleContainer.Parent = autoPresserSection
+    local autoToggleBtn = Instance.new("TextButton")
+    autoToggleBtn.Size = UDim2.new(0, 90, 0, 30)
+    autoToggleBtn.Position = UDim2.new(0.5, -45, 0, 26)
+    autoToggleBtn.BackgroundColor3 = theme.danger
+    autoToggleBtn.BackgroundTransparency = 0.2
+    autoToggleBtn.Text = "OFF"
+    autoToggleBtn.TextColor3 = theme.danger
+    autoToggleBtn.TextSize = 13
+    autoToggleBtn.Font = Enum.Font.GothamBold
+    autoToggleBtn.BorderSizePixel = 2
+    autoToggleBtn.BorderColor3 = theme.danger
+    autoToggleBtn.Parent = autoSection
 
-    local autoPresserToggleBtn = Instance.new("TextButton")
-    autoPresserToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    autoPresserToggleBtn.Position = UDim2.new(0.5, -45, 0.5, -15)
-    autoPresserToggleBtn.BackgroundColor3 = theme.danger
-    autoPresserToggleBtn.BackgroundTransparency = 0.2
-    autoPresserToggleBtn.Text = "OFF"
-    autoPresserToggleBtn.TextColor3 = theme.danger
-    autoPresserToggleBtn.TextSize = 13
-    autoPresserToggleBtn.Font = Enum.Font.GothamBold
-    autoPresserToggleBtn.BorderSizePixel = 2
-    autoPresserToggleBtn.BorderColor3 = theme.danger
-    autoPresserToggleBtn.Parent = autoPresserToggleContainer
+    local autoCorner = Instance.new("UICorner")
+    autoCorner.CornerRadius = UDim.new(0, 8)
+    autoCorner.Parent = autoToggleBtn
 
-    local autoPresserBtnCorner = Instance.new("UICorner")
-    autoPresserBtnCorner.CornerRadius = UDim.new(0, 8)
-    autoPresserBtnCorner.Parent = autoPresserToggleBtn
-
-    local autoPresserStatusContainer = Instance.new("Frame")
-    autoPresserStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    autoPresserStatusContainer.Position = UDim2.new(0, 0, 0, 66)
-    autoPresserStatusContainer.BackgroundTransparency = 1
-    autoPresserStatusContainer.Parent = autoPresserSection
-
-    local autoPresserStatusLabel = Instance.new("TextLabel")
-    autoPresserStatusLabel.Size = UDim2.new(1, 0, 1, 0)
-    autoPresserStatusLabel.BackgroundTransparency = 1
-    autoPresserStatusLabel.Text = "Ativa/Desativa com [R] • Segura [E]"
-    autoPresserStatusLabel.TextColor3 = theme.textMuted
-    autoPresserStatusLabel.TextSize = 10
-    autoPresserStatusLabel.Font = Enum.Font.Gotham
-    autoPresserStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
-    autoPresserStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
-    autoPresserStatusLabel.Parent = autoPresserStatusContainer
+    local autoStatusLabel = Instance.new("TextLabel")
+    autoStatusLabel.Size = UDim2.new(1, 0, 0, 16)
+    autoStatusLabel.Position = UDim2.new(0, 0, 0, 66)
+    autoStatusLabel.BackgroundTransparency = 1
+    autoStatusLabel.Text = "Ativa/Desativa com [R] • Segura [E]"
+    autoStatusLabel.TextColor3 = theme.textMuted
+    autoStatusLabel.TextSize = 10
+    autoStatusLabel.Font = Enum.Font.Gotham
+    autoStatusLabel.Parent = autoSection
 
     local keySelectorContainer = Instance.new("Frame")
     keySelectorContainer.Size = UDim2.new(1, 0, 0, 42)
     keySelectorContainer.Position = UDim2.new(0, 0, 0, 84)
     keySelectorContainer.BackgroundTransparency = 1
-    keySelectorContainer.Parent = autoPresserSection
+    keySelectorContainer.Parent = autoSection
 
     local toggleKeyBtn = Instance.new("TextButton")
     toggleKeyBtn.Size = UDim2.new(0.5, -6, 0, 30)
-    toggleKeyBtn.Position = UDim2.new(0, 0, 0, 0)
     toggleKeyBtn.BackgroundColor3 = theme.surface2
     toggleKeyBtn.BackgroundTransparency = 0.3
     toggleKeyBtn.Text = "R"
@@ -2182,20 +1866,19 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     toggleKeyBtn.BorderColor3 = theme.autoPresserColor
     toggleKeyBtn.Parent = keySelectorContainer
 
-    local toggleKeyBtnCorner = Instance.new("UICorner")
-    toggleKeyBtnCorner.CornerRadius = UDim.new(0, 8)
-    toggleKeyBtnCorner.Parent = toggleKeyBtn
+    local tKeyCorner = Instance.new("UICorner")
+    tKeyCorner.CornerRadius = UDim.new(0, 8)
+    tKeyCorner.Parent = toggleKeyBtn
 
-    local toggleKeyCaption = Instance.new("TextLabel")
-    toggleKeyCaption.Size = UDim2.new(0.5, -6, 0, 12)
-    toggleKeyCaption.Position = UDim2.new(0, 0, 1, -12)
-    toggleKeyCaption.BackgroundTransparency = 1
-    toggleKeyCaption.Text = "TECLA ATIVA"
-    toggleKeyCaption.TextColor3 = theme.textMuted
-    toggleKeyCaption.TextSize = 8
-    toggleKeyCaption.Font = Enum.Font.GothamBold
-    toggleKeyCaption.TextXAlignment = Enum.TextXAlignment.Center
-    toggleKeyCaption.Parent = keySelectorContainer
+    local tKeyCaption = Instance.new("TextLabel")
+    tKeyCaption.Size = UDim2.new(0.5, -6, 0, 12)
+    tKeyCaption.Position = UDim2.new(0, 0, 1, -12)
+    tKeyCaption.BackgroundTransparency = 1
+    tKeyCaption.Text = "TECLA ATIVA"
+    tKeyCaption.TextColor3 = theme.textMuted
+    tKeyCaption.TextSize = 8
+    tKeyCaption.Font = Enum.Font.GothamBold
+    tKeyCaption.Parent = keySelectorContainer
 
     local pressKeyBtn = Instance.new("TextButton")
     pressKeyBtn.Size = UDim2.new(0.5, -6, 0, 30)
@@ -2210,23 +1893,22 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     pressKeyBtn.BorderColor3 = theme.autoPresserColor
     pressKeyBtn.Parent = keySelectorContainer
 
-    local pressKeyBtnCorner = Instance.new("UICorner")
-    pressKeyBtnCorner.CornerRadius = UDim.new(0, 8)
-    pressKeyBtnCorner.Parent = pressKeyBtn
+    local pKeyCorner = Instance.new("UICorner")
+    pKeyCorner.CornerRadius = UDim.new(0, 8)
+    pKeyCorner.Parent = pressKeyBtn
 
-    local pressKeyCaption = Instance.new("TextLabel")
-    pressKeyCaption.Size = UDim2.new(0.5, -6, 0, 12)
-    pressKeyCaption.Position = UDim2.new(0.5, 6, 1, -12)
-    pressKeyCaption.BackgroundTransparency = 1
-    pressKeyCaption.Text = "TECLA SEGURA"
-    pressKeyCaption.TextColor3 = theme.textMuted
-    pressKeyCaption.TextSize = 8
-    pressKeyCaption.Font = Enum.Font.GothamBold
-    pressKeyCaption.TextXAlignment = Enum.TextXAlignment.Center
-    pressKeyCaption.Parent = keySelectorContainer
+    local pKeyCaption = Instance.new("TextLabel")
+    pKeyCaption.Size = UDim2.new(0.5, -6, 0, 12)
+    pKeyCaption.Position = UDim2.new(0.5, 6, 1, -12)
+    pKeyCaption.BackgroundTransparency = 1
+    pKeyCaption.Text = "TECLA SEGURA"
+    pKeyCaption.TextColor3 = theme.textMuted
+    pKeyCaption.TextSize = 8
+    pKeyCaption.Font = Enum.Font.GothamBold
+    pKeyCaption.Parent = keySelectorContainer
 
     -- ============================================
-    -- SEÇÃO HITBOX EXPANDER
+    -- SEÇÃO HITBOX
     -- ============================================
     local hitboxSection = Instance.new("Frame")
     hitboxSection.Size = UDim2.new(1, 0, 0, 84)
@@ -2253,18 +1935,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxTitle.TextSize = 12
     hitboxTitle.Font = Enum.Font.GothamBold
     hitboxTitle.TextXAlignment = Enum.TextXAlignment.Left
-    hitboxTitle.TextYAlignment = Enum.TextYAlignment.Center
     hitboxTitle.Parent = hitboxTitleContainer
-
-    local hitboxToggleContainer = Instance.new("Frame")
-    hitboxToggleContainer.Size = UDim2.new(1, 0, 0, 34)
-    hitboxToggleContainer.Position = UDim2.new(0, 0, 0, 26)
-    hitboxToggleContainer.BackgroundTransparency = 1
-    hitboxToggleContainer.Parent = hitboxSection
 
     local hitboxToggleBtn = Instance.new("TextButton")
     hitboxToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    hitboxToggleBtn.Position = UDim2.new(0.5, -48, 0.5, -15)
+    hitboxToggleBtn.Position = UDim2.new(0.5, -48, 0, 26)
     hitboxToggleBtn.BackgroundColor3 = theme.danger
     hitboxToggleBtn.BackgroundTransparency = 0.2
     hitboxToggleBtn.Text = "OFF"
@@ -2273,7 +1948,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxToggleBtn.Font = Enum.Font.GothamBold
     hitboxToggleBtn.BorderSizePixel = 2
     hitboxToggleBtn.BorderColor3 = theme.danger
-    hitboxToggleBtn.Parent = hitboxToggleContainer
+    hitboxToggleBtn.Parent = hitboxSection
 
     local hitboxBtnCorner = Instance.new("UICorner")
     hitboxBtnCorner.CornerRadius = UDim.new(0, 8)
@@ -2281,7 +1956,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local hitboxViewBtn = Instance.new("TextButton")
     hitboxViewBtn.Size = UDim2.new(0, 30, 0, 30)
-    hitboxViewBtn.Position = UDim2.new(0.5, 48, 0.5, -15)
+    hitboxViewBtn.Position = UDim2.new(0.5, 48, 0, 26)
     hitboxViewBtn.BackgroundColor3 = theme.surface2
     hitboxViewBtn.BackgroundTransparency = 0.3
     hitboxViewBtn.Text = "👁"
@@ -2290,54 +1965,21 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxViewBtn.Font = Enum.Font.GothamBold
     hitboxViewBtn.BorderSizePixel = 2
     hitboxViewBtn.BorderColor3 = theme.danger
-    hitboxViewBtn.Parent = hitboxToggleContainer
+    hitboxViewBtn.Parent = hitboxSection
 
     local hitboxViewCorner = Instance.new("UICorner")
     hitboxViewCorner.CornerRadius = UDim.new(0, 8)
     hitboxViewCorner.Parent = hitboxViewBtn
 
-    local xOverlay1 = Instance.new("Frame")
-    xOverlay1.Size = UDim2.new(0, 20, 0, 2)
-    xOverlay1.Position = UDim2.new(0.5, -10, 0.5, -1)
-    xOverlay1.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
-    xOverlay1.BorderSizePixel = 0
-    xOverlay1.Rotation = 45
-    xOverlay1.ZIndex = 3
-    xOverlay1.Parent = hitboxViewBtn
-
-    local xOverlay1Corner = Instance.new("UICorner")
-    xOverlay1Corner.CornerRadius = UDim.new(1, 0)
-    xOverlay1Corner.Parent = xOverlay1
-
-    local xOverlay2 = Instance.new("Frame")
-    xOverlay2.Size = UDim2.new(0, 20, 0, 2)
-    xOverlay2.Position = UDim2.new(0.5, -10, 0.5, -1)
-    xOverlay2.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
-    xOverlay2.BorderSizePixel = 0
-    xOverlay2.Rotation = -45
-    xOverlay2.ZIndex = 3
-    xOverlay2.Parent = hitboxViewBtn
-
-    local xOverlay2Corner = Instance.new("UICorner")
-    xOverlay2Corner.CornerRadius = UDim.new(1, 0)
-    xOverlay2Corner.Parent = xOverlay2
-
-    local hitboxStatusContainer = Instance.new("Frame")
-    hitboxStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    hitboxStatusContainer.Position = UDim2.new(0, 0, 0, 66)
-    hitboxStatusContainer.BackgroundTransparency = 1
-    hitboxStatusContainer.Parent = hitboxSection
-
     local hitboxStatusLabel = Instance.new("TextLabel")
-    hitboxStatusLabel.Size = UDim2.new(1, 0, 1, 0)
+    hitboxStatusLabel.Size = UDim2.new(1, 0, 0, 16)
+    hitboxStatusLabel.Position = UDim2.new(0, 0, 0, 66)
     hitboxStatusLabel.BackgroundTransparency = 1
     hitboxStatusLabel.Text = "Expanda a hitbox dos jogadores"
     hitboxStatusLabel.TextColor3 = theme.textMuted
     hitboxStatusLabel.TextSize = 10
     hitboxStatusLabel.Font = Enum.Font.Gotham
-    hitboxStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
-    hitboxStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
-    hitboxStatusLabel.Parent = hitboxStatusContainer
+    hitboxStatusLabel.Parent = hitboxSection
 
     -- ============================================
     -- SEÇÃO FLY
@@ -2367,56 +2009,27 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyTitle.TextSize = 12
     flyTitle.Font = Enum.Font.GothamBold
     flyTitle.TextXAlignment = Enum.TextXAlignment.Left
-    flyTitle.TextYAlignment = Enum.TextYAlignment.Center
     flyTitle.Parent = flyTitleContainer
 
-    local flySpeedDisplay = Instance.new("Frame")
-    flySpeedDisplay.Size = UDim2.new(0, 76, 0, 28)
-    flySpeedDisplay.Position = UDim2.new(0.5, -38, 0, 26)
-    flySpeedDisplay.BackgroundColor3 = theme.surface2
-    flySpeedDisplay.BackgroundTransparency = 0.3
-    flySpeedDisplay.BorderSizePixel = 0
-    flySpeedDisplay.Parent = flySection
-
-    local flyDisplayCorner = Instance.new("UICorner")
-    flyDisplayCorner.CornerRadius = UDim.new(0, 8)
-    flyDisplayCorner.Parent = flySpeedDisplay
-
-    local flyDisplayStroke = Instance.new("UIStroke")
-    flyDisplayStroke.Thickness = 1
-    flyDisplayStroke.Color = theme.flyColor
-    flyDisplayStroke.Transparency = 0.5
-    flyDisplayStroke.Parent = flySpeedDisplay
-
     local flySpeedValue = Instance.new("TextLabel")
-    flySpeedValue.Size = UDim2.new(1, 0, 0.6, 0)
-    flySpeedValue.Position = UDim2.new(0, 0, 0.1, 0)
-    flySpeedValue.BackgroundTransparency = 1
+    flySpeedValue.Size = UDim2.new(0, 76, 0, 28)
+    flySpeedValue.Position = UDim2.new(0.5, -38, 0, 26)
+    flySpeedValue.BackgroundColor3 = theme.surface2
+    flySpeedValue.BackgroundTransparency = 0.3
     flySpeedValue.Text = tostring(flyModule.speed)
     flySpeedValue.TextColor3 = theme.flyColor
-    flySpeedValue.TextSize = 18
+    flySpeedValue.TextSize = 16
     flySpeedValue.Font = Enum.Font.GothamBold
-    flySpeedValue.TextXAlignment = Enum.TextXAlignment.Center
-    flySpeedValue.TextYAlignment = Enum.TextYAlignment.Bottom
-    flySpeedValue.Parent = flySpeedDisplay
+    flySpeedValue.Parent = flySection
 
-    local flySpeedUnit = Instance.new("TextLabel")
-    flySpeedUnit.Size = UDim2.new(1, 0, 0.3, 0)
-    flySpeedUnit.Position = UDim2.new(0, 0, 0.65, 0)
-    flySpeedUnit.BackgroundTransparency = 1
-    flySpeedUnit.Text = "FLY VEL"
-    flySpeedUnit.TextColor3 = theme.textMuted
-    flySpeedUnit.TextSize = 6
-    flySpeedUnit.Font = Enum.Font.Gotham
-    flySpeedUnit.TextXAlignment = Enum.TextXAlignment.Center
-    flySpeedUnit.TextYAlignment = Enum.TextYAlignment.Top
-    flySpeedUnit.Parent = flySpeedDisplay
+    local flySpeedValueCorner = Instance.new("UICorner")
+    flySpeedValueCorner.CornerRadius = UDim.new(0, 8)
+    flySpeedValueCorner.Parent = flySpeedValue
 
     local flySliderContainer = Instance.new("Frame")
     flySliderContainer.Size = UDim2.new(1, -16, 0, 20)
     flySliderContainer.Position = UDim2.new(0, 8, 0, 60)
     flySliderContainer.BackgroundTransparency = 1
-    flySliderContainer.ClipsDescendants = false
     flySliderContainer.Parent = flySection
 
     local flyMinLabel = Instance.new("TextLabel")
@@ -2426,8 +2039,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyMinLabel.TextColor3 = theme.textMuted
     flyMinLabel.TextSize = 7
     flyMinLabel.Font = Enum.Font.Gotham
-    flyMinLabel.TextXAlignment = Enum.TextXAlignment.Center
-    flyMinLabel.TextYAlignment = Enum.TextYAlignment.Center
     flyMinLabel.Parent = flySliderContainer
 
     local flyMaxLabel = Instance.new("TextLabel")
@@ -2438,8 +2049,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyMaxLabel.TextColor3 = theme.textMuted
     flyMaxLabel.TextSize = 7
     flyMaxLabel.Font = Enum.Font.Gotham
-    flyMaxLabel.TextXAlignment = Enum.TextXAlignment.Center
-    flyMaxLabel.TextYAlignment = Enum.TextYAlignment.Center
     flyMaxLabel.Parent = flySliderContainer
 
     local flySliderTrack = Instance.new("Frame")
@@ -2447,7 +2056,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flySliderTrack.Position = UDim2.new(0, 22, 0.5, -2)
     flySliderTrack.BackgroundColor3 = theme.surface3
     flySliderTrack.BorderSizePixel = 0
-    flySliderTrack.ClipsDescendants = false
     flySliderTrack.Parent = flySliderContainer
 
     local flyTrackCorner = Instance.new("UICorner")
@@ -2463,12 +2071,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     local flyFillCorner = Instance.new("UICorner")
     flyFillCorner.CornerRadius = UDim.new(1, 0)
     flyFillCorner.Parent = flySliderFill
-
-    local flyFillGlow = Instance.new("UIStroke")
-    flyFillGlow.Thickness = 2
-    flyFillGlow.Color = theme.flyColor
-    flyFillGlow.Transparency = 0.6
-    flyFillGlow.Parent = flySliderFill
 
     local flySliderButton = Instance.new("TextButton")
     flySliderButton.Size = UDim2.new(0, 11, 0, 11)
@@ -2488,15 +2090,9 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyButtonStroke.Color = theme.flyColor
     flyButtonStroke.Parent = flySliderButton
 
-    local flyToggleContainer = Instance.new("Frame")
-    flyToggleContainer.Size = UDim2.new(1, 0, 0, 34)
-    flyToggleContainer.Position = UDim2.new(0, 0, 0, 82)
-    flyToggleContainer.BackgroundTransparency = 1
-    flyToggleContainer.Parent = flySection
-
     local flyToggleBtn = Instance.new("TextButton")
     flyToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    flyToggleBtn.Position = UDim2.new(0.5, -45, 0.5, -15)
+    flyToggleBtn.Position = UDim2.new(0.5, -45, 0, 82)
     flyToggleBtn.BackgroundColor3 = theme.danger
     flyToggleBtn.BackgroundTransparency = 0.2
     flyToggleBtn.Text = "OFF"
@@ -2505,96 +2101,250 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyToggleBtn.Font = Enum.Font.GothamBold
     flyToggleBtn.BorderSizePixel = 2
     flyToggleBtn.BorderColor3 = theme.danger
-    flyToggleBtn.Parent = flyToggleContainer
+    flyToggleBtn.Parent = flySection
 
     local flyBtnCorner = Instance.new("UICorner")
     flyBtnCorner.CornerRadius = UDim.new(0, 8)
     flyBtnCorner.Parent = flyToggleBtn
 
-    flyToggleBtn.MouseEnter:Connect(function()
-        if flyToggleBtn.Text == "OFF" then
-            TweenService:Create(flyToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
-        end
-    end)
-    flyToggleBtn.MouseLeave:Connect(function()
-        if flyToggleBtn.Text == "OFF" then
-            TweenService:Create(flyToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
-        end
-    end)
+    -- ============================================
+    -- SEÇÃO AIMBOT (PÁGINA 2)
+    -- ============================================
+    local aimbotSection = Instance.new("Frame")
+    aimbotSection.Size = UDim2.new(1, 0, 0, 130)
+    aimbotSection.Position = UDim2.new(0, 0, 0, 0)
+    aimbotSection.BackgroundTransparency = 1
+    aimbotSection.Parent = page2
 
-    local flyStatusContainer = Instance.new("Frame")
-    flyStatusContainer.Size = UDim2.new(1, 0, 0, 16)
-    flyStatusContainer.Position = UDim2.new(0, 0, 0, 116)
-    flyStatusContainer.BackgroundTransparency = 1
-    flyStatusContainer.Parent = flySection
+    createAccentBar(aimbotSection, theme.aimbotColor)
 
-    local flyStatusLabel = Instance.new("TextLabel")
-    flyStatusLabel.Size = UDim2.new(1, 0, 1, 0)
-    flyStatusLabel.BackgroundTransparency = 1
-    flyStatusLabel.Text = "Pressione F para voar"
-    flyStatusLabel.TextColor3 = theme.textMuted
-    flyStatusLabel.TextSize = 10
-    flyStatusLabel.Font = Enum.Font.Gotham
-    flyStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
-    flyStatusLabel.TextYAlignment = Enum.TextYAlignment.Center
-    flyStatusLabel.Parent = flyStatusContainer
+    local aimbotTitleContainer = Instance.new("Frame")
+    aimbotTitleContainer.Size = UDim2.new(1, -12, 0, 22)
+    aimbotTitleContainer.Position = UDim2.new(0, 12, 0, 0)
+    aimbotTitleContainer.BackgroundTransparency = 1
+    aimbotTitleContainer.Parent = aimbotSection
+
+    createSectionIcon(aimbotTitleContainer, "🎯", theme.aimbotColor)
+
+    local aimbotTitle = Instance.new("TextLabel")
+    aimbotTitle.Size = UDim2.new(1, -30, 1, 0)
+    aimbotTitle.Position = UDim2.new(0, 28, 0, 0)
+    aimbotTitle.BackgroundTransparency = 1
+    aimbotTitle.Text = "AIMBOT"
+    aimbotTitle.TextColor3 = theme.textSecondary
+    aimbotTitle.TextSize = 12
+    aimbotTitle.Font = Enum.Font.GothamBold
+    aimbotTitle.TextXAlignment = Enum.TextXAlignment.Left
+    aimbotTitle.Parent = aimbotTitleContainer
+
+    local aimbotContent = Instance.new("Frame")
+    aimbotContent.Size = UDim2.new(1, 0, 0, 88)
+    aimbotContent.Position = UDim2.new(0, 0, 0, 26)
+    aimbotContent.BackgroundTransparency = 1
+    aimbotContent.Parent = aimbotSection
+
+    -- Toggle (esquerda)
+    local aimbotToggleBtn = Instance.new("TextButton")
+    aimbotToggleBtn.Size = UDim2.new(0, 104, 0, 34)
+    aimbotToggleBtn.Position = UDim2.new(0, 26, 0.5, -17)
+    aimbotToggleBtn.BackgroundColor3 = theme.danger
+    aimbotToggleBtn.BackgroundTransparency = 0.2
+    aimbotToggleBtn.Text = "OFF"
+    aimbotToggleBtn.TextColor3 = theme.danger
+    aimbotToggleBtn.TextSize = 14
+    aimbotToggleBtn.Font = Enum.Font.GothamBold
+    aimbotToggleBtn.BorderSizePixel = 2
+    aimbotToggleBtn.BorderColor3 = theme.danger
+    aimbotToggleBtn.Parent = aimbotContent
+
+    local aimbotBtnCorner = Instance.new("UICorner")
+    aimbotBtnCorner.CornerRadius = UDim.new(0, 8)
+    aimbotBtnCorner.Parent = aimbotToggleBtn
+
+    -- Botão pequeno de FOV (ao lado do toggle)
+    local fovShowBtn = Instance.new("TextButton")
+    fovShowBtn.Size = UDim2.new(0, 28, 0, 28)
+    fovShowBtn.Position = UDim2.new(0, 134, 0.5, -14)
+    fovShowBtn.BackgroundColor3 = theme.surface2
+    fovShowBtn.BackgroundTransparency = 0.3
+    fovShowBtn.Text = "◯"
+    fovShowBtn.TextColor3 = theme.textMuted
+    fovShowBtn.TextSize = 14
+    fovShowBtn.Font = Enum.Font.GothamBold
+    fovShowBtn.BorderSizePixel = 2
+    fovShowBtn.BorderColor3 = theme.aimbotColor
+    fovShowBtn.Parent = aimbotContent
+
+    local fovShowBtnCorner = Instance.new("UICorner")
+    fovShowBtnCorner.CornerRadius = UDim.new(0, 8)
+    fovShowBtnCorner.Parent = fovShowBtn
+
+    -- Slider vertical (direita) — controla FOV
+    local aimbotSliderColumn = Instance.new("Frame")
+    aimbotSliderColumn.Size = UDim2.new(0, 44, 0, 88)
+    aimbotSliderColumn.Position = UDim2.new(1, -52, 0, 0)
+    aimbotSliderColumn.BackgroundTransparency = 1
+    aimbotSliderColumn.Parent = aimbotContent
+
+    local aimbotValueLabel = Instance.new("TextLabel")
+    aimbotValueLabel.Size = UDim2.new(0, 32, 0, 16)
+    aimbotValueLabel.Position = UDim2.new(0.5, -16, 0, 0)
+    aimbotValueLabel.BackgroundColor3 = theme.surface2
+    aimbotValueLabel.BackgroundTransparency = 0.3
+    aimbotValueLabel.Text = "2"
+    aimbotValueLabel.TextColor3 = theme.aimbotColor
+    aimbotValueLabel.TextSize = 12
+    aimbotValueLabel.Font = Enum.Font.GothamBold
+    aimbotValueLabel.Parent = aimbotSliderColumn
+
+    local aimbotValueCorner = Instance.new("UICorner")
+    aimbotValueCorner.CornerRadius = UDim.new(0, 6)
+    aimbotValueCorner.Parent = aimbotValueLabel
+
+    local aimbotValueStroke = Instance.new("UIStroke")
+    aimbotValueStroke.Thickness = 1
+    aimbotValueStroke.Color = theme.aimbotColor
+    aimbotValueStroke.Transparency = 0.5
+    aimbotValueStroke.Parent = aimbotValueLabel
+
+    local aimbotSliderTrack = Instance.new("Frame")
+    aimbotSliderTrack.Size = UDim2.new(0, 4, 0, 44)
+    aimbotSliderTrack.Position = UDim2.new(0, 8, 0, 20)
+    aimbotSliderTrack.BackgroundColor3 = theme.surface3
+    aimbotSliderTrack.BorderSizePixel = 0
+    aimbotSliderTrack.ClipsDescendants = false
+    aimbotSliderTrack.Parent = aimbotSliderColumn
+
+    local aimbotTrackCorner = Instance.new("UICorner")
+    aimbotTrackCorner.CornerRadius = UDim.new(1, 0)
+    aimbotTrackCorner.Parent = aimbotSliderTrack
+
+    local aimbotSliderFill = Instance.new("Frame")
+    aimbotSliderFill.AnchorPoint = Vector2.new(0, 1)
+    aimbotSliderFill.Size = UDim2.new(1, 0, 0, 0)
+    aimbotSliderFill.Position = UDim2.new(0, 0, 1, 0)
+    aimbotSliderFill.BackgroundColor3 = theme.aimbotColor
+    aimbotSliderFill.BorderSizePixel = 0
+    aimbotSliderFill.Parent = aimbotSliderTrack
+
+    local aimbotFillCorner = Instance.new("UICorner")
+    aimbotFillCorner.CornerRadius = UDim.new(1, 0)
+    aimbotFillCorner.Parent = aimbotSliderFill
+
+    local aimbotSliderButton = Instance.new("TextButton")
+    aimbotSliderButton.Size = UDim2.new(0, 11, 0, 11)
+    aimbotSliderButton.AnchorPoint = Vector2.new(0.5, 0.5)
+    aimbotSliderButton.Position = UDim2.new(0.5, 0, 1, 0)
+    aimbotSliderButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    aimbotSliderButton.BorderSizePixel = 0
+    aimbotSliderButton.Text = ""
+    aimbotSliderButton.ZIndex = 5
+    aimbotSliderButton.Parent = aimbotSliderTrack
+
+    local aimbotButtonCorner = Instance.new("UICorner")
+    aimbotButtonCorner.CornerRadius = UDim.new(1, 0)
+    aimbotButtonCorner.Parent = aimbotSliderButton
+
+    local aimbotButtonStroke = Instance.new("UIStroke")
+    aimbotButtonStroke.Thickness = 3
+    aimbotButtonStroke.Color = theme.aimbotColor
+    aimbotButtonStroke.Parent = aimbotSliderButton
+
+    local aimbotMaxLabel = Instance.new("TextLabel")
+    aimbotMaxLabel.Size = UDim2.new(0, 20, 0, 10)
+    aimbotMaxLabel.Position = UDim2.new(0, 16, 0, 18)
+    aimbotMaxLabel.BackgroundTransparency = 1
+    aimbotMaxLabel.Text = "10"
+    aimbotMaxLabel.TextColor3 = theme.textMuted
+    aimbotMaxLabel.TextSize = 7
+    aimbotMaxLabel.Font = Enum.Font.Gotham
+    aimbotMaxLabel.TextXAlignment = Enum.TextXAlignment.Left
+    aimbotMaxLabel.Parent = aimbotSliderColumn
+
+    local aimbotMinLabel = Instance.new("TextLabel")
+    aimbotMinLabel.Size = UDim2.new(0, 20, 0, 10)
+    aimbotMinLabel.Position = UDim2.new(0, 16, 0, 56)
+    aimbotMinLabel.BackgroundTransparency = 1
+    aimbotMinLabel.Text = "1"
+    aimbotMinLabel.TextColor3 = theme.textMuted
+    aimbotMinLabel.TextSize = 7
+    aimbotMinLabel.Font = Enum.Font.Gotham
+    aimbotMinLabel.TextXAlignment = Enum.TextXAlignment.Left
+    aimbotMinLabel.Parent = aimbotSliderColumn
+
+    local aimbotCaption = Instance.new("TextLabel")
+    aimbotCaption.Size = UDim2.new(1, 0, 0, 10)
+    aimbotCaption.Position = UDim2.new(0, 0, 1, -10)
+    aimbotCaption.BackgroundTransparency = 1
+    aimbotCaption.Text = "FOV"
+    aimbotCaption.TextColor3 = theme.textMuted
+    aimbotCaption.TextSize = 7
+    aimbotCaption.Font = Enum.Font.GothamBold
+    aimbotCaption.Parent = aimbotSliderColumn
+
+    local aimbotStatusLabel = Instance.new("TextLabel")
+    aimbotStatusLabel.Size = UDim2.new(1, 0, 0, 14)
+    aimbotStatusLabel.Position = UDim2.new(0, 0, 0, 116)
+    aimbotStatusLabel.BackgroundTransparency = 1
+    aimbotStatusLabel.Text = "Aimbot sempre ativo quando ligado"
+    aimbotStatusLabel.TextColor3 = theme.textMuted
+    aimbotStatusLabel.TextSize = 10
+    aimbotStatusLabel.Font = Enum.Font.Gotham
+    aimbotStatusLabel.Parent = aimbotSection
 
     -- ============================================
-    -- LÓGICA DOS SLIDERS
+    -- SLIDERS — Velocidade
     -- ============================================
     local speedIsActive = false
     local speedMin, speedMax = 5, 500
     local currentSpeedValue = speedModule.currentSpeed or 16
     local speedDragging = false
-    local speedDragConnection, speedReleaseConnection = nil, nil
+    local speedDragConn, speedReleaseConn = nil, nil
 
-    local function updateSpeedSliderVisual(value)
+    local function updateSpeedVisual(value)
         local percent = math.clamp((value - speedMin) / (speedMax - speedMin), 0, 1)
         sliderFill.Size = UDim2.new(percent, 0, 1, 0)
-        local trackWidth = sliderTrack.AbsoluteSize.X
-        local thumbWidth = sliderButton.AbsoluteSize.X
-        if trackWidth > 0 and thumbWidth > 0 then
-            local maxX = trackWidth - thumbWidth
-            sliderButton.Position = UDim2.new(0, percent * maxX, 0.5, -thumbWidth / 2)
+        local tw = sliderTrack.AbsoluteSize.X
+        local bw = sliderButton.AbsoluteSize.X
+        if tw > 0 and bw > 0 then
+            sliderButton.Position = UDim2.new(0, percent * (tw - bw), 0.5, -bw / 2)
         end
         speedValue.Text = tostring(math.floor(value))
     end
 
-    local function setSpeedValueFromInput(inputX)
-        local trackLeft = sliderTrack.AbsolutePosition.X
-        local trackWidth = sliderTrack.AbsoluteSize.X
-        local thumbWidth = sliderButton.AbsoluteSize.X
-        if trackWidth <= 0 then return end
-        local maxX = trackWidth - thumbWidth
+    local function setSpeedFromX(x)
+        local tl = sliderTrack.AbsolutePosition.X
+        local tw = sliderTrack.AbsoluteSize.X
+        local bw = sliderButton.AbsoluteSize.X
+        if tw <= 0 then return end
+        local maxX = tw - bw
         if maxX <= 0 then return end
-        local relativeX = inputX - trackLeft - (thumbWidth / 2)
-        local percent = math.clamp(relativeX / maxX, 0, 1)
-        local value = speedMin + percent * (speedMax - speedMin)
-        currentSpeedValue = value
-        speedModule:setSpeed(value)
-        updateSpeedSliderVisual(value)
+        local rel = x - tl - (bw / 2)
+        local p = math.clamp(rel / maxX, 0, 1)
+        local v = speedMin + p * (speedMax - speedMin)
+        currentSpeedValue = v
+        speedModule:setSpeed(v)
+        updateSpeedVisual(v)
     end
 
     task.spawn(function()
         while sliderTrack.AbsoluteSize.X <= 0 do RunService.RenderStepped:Wait() end
-        updateSpeedSliderVisual(currentSpeedValue)
+        updateSpeedVisual(currentSpeedValue)
     end)
 
     sliderButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             speedDragging = true
-            TweenService:Create(buttonStroke, TweenInfo.new(0.15), {Thickness = 4}):Play()
-            speedDragConnection = UIS.InputChanged:Connect(function(moveInput)
-                if (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) and speedDragging then
-                    setSpeedValueFromInput(moveInput.Position.X)
+            speedDragConn = UIS.InputChanged:Connect(function(mi)
+                if (mi.UserInputType == Enum.UserInputType.MouseMovement or mi.UserInputType == Enum.UserInputType.Touch) and speedDragging then
+                    setSpeedFromX(mi.Position.X)
                 end
             end)
-            speedReleaseConnection = UIS.InputEnded:Connect(function(endInput)
-                if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
+            speedReleaseConn = UIS.InputEnded:Connect(function(ei)
+                if ei.UserInputType == Enum.UserInputType.MouseButton1 or ei.UserInputType == Enum.UserInputType.Touch then
                     speedDragging = false
-                    TweenService:Create(buttonStroke, TweenInfo.new(0.15), {Thickness = 3}):Play()
-                    if speedDragConnection then speedDragConnection:Disconnect() speedDragConnection = nil end
-                    if speedReleaseConnection then speedReleaseConnection:Disconnect() speedReleaseConnection = nil end
+                    if speedDragConn then speedDragConn:Disconnect() speedDragConn = nil end
+                    if speedReleaseConn then speedReleaseConn:Disconnect() speedReleaseConn = nil end
                 end
             end)
         end
@@ -2602,63 +2352,62 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     sliderTrack.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            setSpeedValueFromInput(input.Position.X)
+            setSpeedFromX(input.Position.X)
         end
     end)
 
-    -- Slider Fly
+    -- ============================================
+    -- SLIDERS — Fly
+    -- ============================================
     local flyMin, flyMax = 1, 10
     local currentFlyValue = flyModule.speed or 1
     local flyDragging = false
-    local flyDragConnection, flyReleaseConnection = nil, nil
+    local flyDragConn, flyReleaseConn = nil, nil
 
-    local function updateFlySliderVisual(value)
+    local function updateFlyVisual(value)
         local percent = math.clamp((value - flyMin) / (flyMax - flyMin), 0, 1)
         flySliderFill.Size = UDim2.new(percent, 0, 1, 0)
-        local trackWidth = flySliderTrack.AbsoluteSize.X
-        local thumbWidth = flySliderButton.AbsoluteSize.X
-        if trackWidth > 0 and thumbWidth > 0 then
-            local maxX = trackWidth - thumbWidth
-            flySliderButton.Position = UDim2.new(0, percent * maxX, 0.5, -thumbWidth / 2)
+        local tw = flySliderTrack.AbsoluteSize.X
+        local bw = flySliderButton.AbsoluteSize.X
+        if tw > 0 and bw > 0 then
+            flySliderButton.Position = UDim2.new(0, percent * (tw - bw), 0.5, -bw / 2)
         end
         flySpeedValue.Text = tostring(math.floor(value))
     end
 
-    local function setFlyValueFromInput(inputX)
-        local trackLeft = flySliderTrack.AbsolutePosition.X
-        local trackWidth = flySliderTrack.AbsoluteSize.X
-        local thumbWidth = flySliderButton.AbsoluteSize.X
-        if trackWidth <= 0 then return end
-        local maxX = trackWidth - thumbWidth
+    local function setFlyFromX(x)
+        local tl = flySliderTrack.AbsolutePosition.X
+        local tw = flySliderTrack.AbsoluteSize.X
+        local bw = flySliderButton.AbsoluteSize.X
+        if tw <= 0 then return end
+        local maxX = tw - bw
         if maxX <= 0 then return end
-        local relativeX = inputX - trackLeft - (thumbWidth / 2)
-        local percent = math.clamp(relativeX / maxX, 0, 1)
-        local value = math.floor(flyMin + percent * (flyMax - flyMin) + 0.5)
-        currentFlyValue = value
-        flyModule:setSpeed(value)
-        updateFlySliderVisual(value)
+        local rel = x - tl - (bw / 2)
+        local p = math.clamp(rel / maxX, 0, 1)
+        local v = math.floor(flyMin + p * (flyMax - flyMin) + 0.5)
+        currentFlyValue = v
+        flyModule:setSpeed(v)
+        updateFlyVisual(v)
     end
 
     task.spawn(function()
         while flySliderTrack.AbsoluteSize.X <= 0 do RunService.RenderStepped:Wait() end
-        updateFlySliderVisual(currentFlyValue)
+        updateFlyVisual(currentFlyValue)
     end)
 
     flySliderButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             flyDragging = true
-            TweenService:Create(flyButtonStroke, TweenInfo.new(0.15), {Thickness = 4}):Play()
-            flyDragConnection = UIS.InputChanged:Connect(function(moveInput)
-                if (moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch) and flyDragging then
-                    setFlyValueFromInput(moveInput.Position.X)
+            flyDragConn = UIS.InputChanged:Connect(function(mi)
+                if (mi.UserInputType == Enum.UserInputType.MouseMovement or mi.UserInputType == Enum.UserInputType.Touch) and flyDragging then
+                    setFlyFromX(mi.Position.X)
                 end
             end)
-            flyReleaseConnection = UIS.InputEnded:Connect(function(endInput)
-                if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
+            flyReleaseConn = UIS.InputEnded:Connect(function(ei)
+                if ei.UserInputType == Enum.UserInputType.MouseButton1 or ei.UserInputType == Enum.UserInputType.Touch then
                     flyDragging = false
-                    TweenService:Create(flyButtonStroke, TweenInfo.new(0.15), {Thickness = 3}):Play()
-                    if flyDragConnection then flyDragConnection:Disconnect() flyDragConnection = nil end
-                    if flyReleaseConnection then flyReleaseConnection:Disconnect() flyReleaseConnection = nil end
+                    if flyDragConn then flyDragConn:Disconnect() flyDragConn = nil end
+                    if flyReleaseConn then flyReleaseConn:Disconnect() flyReleaseConn = nil end
                 end
             end)
         end
@@ -2666,119 +2415,165 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     flySliderTrack.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            setFlyValueFromInput(input.Position.X)
+            setFlyFromX(input.Position.X)
         end
     end)
 
     -- ============================================
-    -- SISTEMA DE PAGINAÇÃO
+    -- SLIDER — AIMBOT (vertical, controla FOV)
+    -- ============================================
+    local aimbotMin, aimbotMax = 1, 10
+    local currentAimbotValue = math.clamp(math.floor((aimbotModule.fov or 120) / 60 + 0.5), 1, 10)
+    local aimbotDragging = false
+    local aimbotDragConn, aimbotReleaseConn = nil, nil
+
+    local function updateAimbotVisual(value)
+        local percent = math.clamp((value - aimbotMin) / (aimbotMax - aimbotMin), 0, 1)
+        aimbotSliderFill.Size = UDim2.new(1, 0, percent, 0)
+        aimbotSliderButton.Position = UDim2.new(0.5, 0, 1 - percent, 0)
+        aimbotValueLabel.Text = tostring(math.floor(value))
+    end
+
+    local function setAimbotFromY(y)
+        local tt = aimbotSliderTrack.AbsolutePosition.Y
+        local th = aimbotSliderTrack.AbsoluteSize.Y
+        if th <= 0 then return end
+        local rel = y - tt
+        local p = 1 - math.clamp(rel / th, 0, 1)
+        local v = math.floor(aimbotMin + p * (aimbotMax - aimbotMin) + 0.5)
+        currentAimbotValue = v
+        aimbotModule:setFOV(v)
+        updateAimbotVisual(v)
+    end
+
+    updateAimbotVisual(currentAimbotValue)
+
+    aimbotSliderButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            aimbotDragging = true
+            aimbotDragConn = UIS.InputChanged:Connect(function(mi)
+                if (mi.UserInputType == Enum.UserInputType.MouseMovement or mi.UserInputType == Enum.UserInputType.Touch) and aimbotDragging then
+                    setAimbotFromY(mi.Position.Y)
+                end
+            end)
+            aimbotReleaseConn = UIS.InputEnded:Connect(function(ei)
+                if ei.UserInputType == Enum.UserInputType.MouseButton1 or ei.UserInputType == Enum.UserInputType.Touch then
+                    aimbotDragging = false
+                    if aimbotDragConn then aimbotDragConn:Disconnect() aimbotDragConn = nil end
+                    if aimbotReleaseConn then aimbotReleaseConn:Disconnect() aimbotReleaseConn = nil end
+                end
+            end)
+        end
+    end)
+
+    aimbotSliderTrack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            setAimbotFromY(input.Position.Y)
+        end
+    end)
+
+    -- Handler do botão de mostrar FOV
+    local isShowingFOV = false
+    fovShowBtn.MouseButton1Click:Connect(function()
+        isShowingFOV = not isShowingFOV
+        fovCircle.Visible = isShowingFOV
+        if isShowingFOV then
+            fovShowBtn.Text = "◉"
+            fovShowBtn.TextColor3 = theme.aimbotColor
+            fovShowBtn.BackgroundColor3 = theme.aimbotColor
+            fovShowBtn.BackgroundTransparency = 0.85
+            fovShowBtn.BorderColor3 = theme.success
+        else
+            fovShowBtn.Text = "◯"
+            fovShowBtn.TextColor3 = theme.textMuted
+            fovShowBtn.BackgroundColor3 = theme.surface2
+            fovShowBtn.BackgroundTransparency = 0.3
+            fovShowBtn.BorderColor3 = theme.aimbotColor
+        end
+    end)
+
+    -- ============================================
+    -- PAGINAÇÃO
     -- ============================================
     local currentPage = 1
     local totalPages = 2
 
     local function updatePaginationVisuals()
         pageIndicator.Text = currentPage .. "/" .. totalPages
-
-        if currentPage == 1 then
-            prevPageBtn.TextColor3 = Color3.fromRGB(60, 60, 75)
-            nextPageBtn.TextColor3 = theme.textSecondary
-        else
-            prevPageBtn.TextColor3 = theme.textSecondary
-            nextPageBtn.TextColor3 = Color3.fromRGB(60, 60, 75)
-        end
+        prevPageBtn.TextColor3 = (currentPage == 1) and Color3.fromRGB(60, 60, 75) or theme.textSecondary
+        nextPageBtn.TextColor3 = (currentPage == 2) and Color3.fromRGB(60, 60, 75) or theme.textSecondary
     end
 
     local function switchPage(newPage)
         if newPage < 1 or newPage > totalPages then return end
         if newPage == currentPage then return end
-
         local oldPage = currentPage
         currentPage = newPage
-
-        local currentPageFrame = (oldPage == 1) and page1 or page2
-        local targetPageFrame = (newPage == 1) and page1 or page2
-
-        currentPageFrame.Visible = false
-        targetPageFrame.Visible = true
-
+        local oldFrame = (oldPage == 1) and page1 or page2
+        local newFrame = (newPage == 1) and page1 or page2
+        oldFrame.Visible = false
+        newFrame.Visible = true
         updatePaginationVisuals()
+        if newPage == 2 then
+            task.defer(function()
+                updateAimbotVisual(currentAimbotValue)
+            end)
+        end
     end
 
     prevPageBtn.MouseButton1Click:Connect(function()
-        if currentPage > 1 then
-            switchPage(currentPage - 1)
-        end
+        if currentPage > 1 then switchPage(currentPage - 1) end
     end)
-
     nextPageBtn.MouseButton1Click:Connect(function()
-        if currentPage < totalPages then
-            switchPage(currentPage + 1)
-        end
+        if currentPage < totalPages then switchPage(currentPage + 1) end
     end)
 
     updatePaginationVisuals()
 
     -- ============================================
-    -- HANDLERS DO AUTO PRESSER
+    -- HANDLER AUTO PRESSER
     -- ============================================
-    local function updateAutoPresserStatus()
-        local keyT = autoPresserModule.toggleKey.Name
-        local keyP = autoPresserModule.pressKey.Name
-
+    local function updateAutoStatus()
+        local kT = autoPresserModule.toggleKey.Name
+        local kP = autoPresserModule.pressKey.Name
         if not autoPresserModule.isEnabled then
-            autoPresserToggleBtn.Text = "OFF"
-            autoPresserToggleBtn.TextColor3 = theme.danger
-            autoPresserToggleBtn.BackgroundColor3 = theme.danger
-            autoPresserToggleBtn.BackgroundTransparency = 0.2
-            autoPresserToggleBtn.BorderColor3 = theme.danger
-            local g = autoPresserToggleBtn:FindFirstChildOfClass("UIGradient")
+            autoToggleBtn.Text = "OFF"
+            autoToggleBtn.TextColor3 = theme.danger
+            autoToggleBtn.BackgroundColor3 = theme.danger
+            autoToggleBtn.BackgroundTransparency = 0.2
+            autoToggleBtn.BorderColor3 = theme.danger
+            local g = autoToggleBtn:FindFirstChildOfClass("UIGradient")
             if g then g:Destroy() end
-            autoPresserStatusLabel.Text = string.format("Ativa/Desativa com [%s] • Segura [%s]", keyT, keyP)
-            autoPresserStatusLabel.TextColor3 = theme.textMuted
+            autoStatusLabel.Text = string.format("Ativa/Desativa com [%s] • Segura [%s]", kT, kP)
+            autoStatusLabel.TextColor3 = theme.textMuted
         else
-            autoPresserToggleBtn.Text = "ON"
-            autoPresserToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            autoPresserToggleBtn.BackgroundColor3 = theme.success
-            autoPresserToggleBtn.BackgroundTransparency = 0.15
-            autoPresserToggleBtn.BorderColor3 = theme.success
-
-            local g = autoPresserToggleBtn:FindFirstChildOfClass("UIGradient")
-            if not g then
-                g = Instance.new("UIGradient")
-                g.Parent = autoPresserToggleBtn
-            end
+            autoToggleBtn.Text = "ON"
+            autoToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            autoToggleBtn.BackgroundColor3 = theme.success
+            autoToggleBtn.BackgroundTransparency = 0.15
+            autoToggleBtn.BorderColor3 = theme.success
+            local g = autoToggleBtn:FindFirstChildOfClass("UIGradient")
+            if not g then g = Instance.new("UIGradient") g.Parent = autoToggleBtn end
             g.Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
                 ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
             })
             g.Rotation = 90
-
             if autoPresserModule.isHolding then
-                autoPresserStatusLabel.Text = string.format("Pressione [%s] para parar • Segurando [%s]", keyT, keyP)
-                autoPresserStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
+                autoStatusLabel.Text = string.format("Pressione [%s] para parar • Segurando [%s]", kT, kP)
+                autoStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
             else
-                autoPresserStatusLabel.Text = string.format("Pressione [%s] para segurar [%s]", keyT, keyP)
-                autoPresserStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+                autoStatusLabel.Text = string.format("Pressione [%s] para segurar [%s]", kT, kP)
+                autoStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
             end
         end
     end
 
-    autoPresserModule.onHoldChanged = function() updateAutoPresserStatus() end
+    autoPresserModule.onHoldChanged = function() updateAutoStatus() end
 
-    autoPresserToggleBtn.MouseButton1Click:Connect(function()
+    autoToggleBtn.MouseButton1Click:Connect(function()
         autoPresserModule:toggle()
-        updateAutoPresserStatus()
-    end)
-
-    autoPresserToggleBtn.MouseEnter:Connect(function()
-        if autoPresserToggleBtn.Text == "OFF" then
-            TweenService:Create(autoPresserToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
-        end
-    end)
-    autoPresserToggleBtn.MouseLeave:Connect(function()
-        if autoPresserToggleBtn.Text == "OFF" then
-            TweenService:Create(autoPresserToggleBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}):Play()
-        end
+        updateAutoStatus()
     end)
 
     local capturingFor = nil
@@ -2811,7 +2606,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             pressKeyBtn.BorderColor3 = theme.warning
             pressKeyBtn.TextSize = 13
         end
-        captureConnection = UIS.InputBegan:Connect(function(input, gameProcessed)
+        captureConnection = UIS.InputBegan:Connect(function(input, gp)
             if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
             if input.KeyCode == Enum.KeyCode.Escape then stopCapturing() return end
             if capturingFor == "toggle" then
@@ -2823,7 +2618,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
                 autoPresserModule:_disconnectKeyToggle()
                 autoPresserModule:_connectKeyToggle()
             end
-            updateAutoPresserStatus()
+            updateAutoStatus()
             stopCapturing()
         end)
     end
@@ -2832,183 +2627,79 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     pressKeyBtn.MouseButton1Click:Connect(function() startCapturing("press") end)
 
     -- ============================================
-    -- HANDLERS DOS OUTROS BOTÕES
+    -- HANDLERS DOS TOGGLES
     -- ============================================
-    speedToggleBtn.MouseButton1Click:Connect(function()
-        speedIsActive = not speedIsActive
-        if speedIsActive then
-            speedModule:enable()
-            speedToggleBtn.Text = "ON"
-            speedToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            speedToggleBtn.BackgroundColor3 = theme.success
-            speedToggleBtn.BackgroundTransparency = 0.15
-            speedToggleBtn.BorderColor3 = theme.success
-            local g = speedToggleBtn:FindFirstChildOfClass("UIGradient")
-            if not g then g = Instance.new("UIGradient") g.Parent = speedToggleBtn end
+    local function toggleVisual(btn, isOn)
+        if isOn then
+            btn.Text = "ON"
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.BackgroundColor3 = theme.success
+            btn.BackgroundTransparency = 0.15
+            btn.BorderColor3 = theme.success
+            local g = btn:FindFirstChildOfClass("UIGradient")
+            if not g then g = Instance.new("UIGradient") g.Parent = btn end
             g.Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
                 ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
             })
             g.Rotation = 90
         else
-            speedModule:disable()
-            speedToggleBtn.Text = "OFF"
-            speedToggleBtn.TextColor3 = theme.danger
-            speedToggleBtn.BackgroundColor3 = theme.danger
-            speedToggleBtn.BackgroundTransparency = 0.15
-            speedToggleBtn.BorderColor3 = theme.danger
-            local g = speedToggleBtn:FindFirstChildOfClass("UIGradient")
+            btn.Text = "OFF"
+            btn.TextColor3 = theme.danger
+            btn.BackgroundColor3 = theme.danger
+            btn.BackgroundTransparency = 0.2
+            btn.BorderColor3 = theme.danger
+            local g = btn:FindFirstChildOfClass("UIGradient")
             if g then g:Destroy() end
         end
+    end
+
+    speedToggleBtn.MouseButton1Click:Connect(function()
+        speedIsActive = not speedIsActive
+        if speedIsActive then speedModule:enable() else speedModule:disable() end
+        toggleVisual(speedToggleBtn, speedIsActive)
     end)
 
     jumpToggleBtn.MouseButton1Click:Connect(function()
-        if jumpModule.isEnabled then
-            jumpModule:disable()
-            jumpToggleBtn.Text = "OFF"
-            jumpToggleBtn.TextColor3 = theme.danger
-            jumpToggleBtn.BackgroundColor3 = theme.danger
-            jumpToggleBtn.BackgroundTransparency = 0.2
-            jumpToggleBtn.BorderColor3 = theme.danger
-            local g = jumpToggleBtn:FindFirstChildOfClass("UIGradient")
-            if g then g:Destroy() end
-        else
-            jumpModule:enable()
-            jumpToggleBtn.Text = "ON"
-            jumpToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            jumpToggleBtn.BackgroundColor3 = theme.success
-            jumpToggleBtn.BackgroundTransparency = 0.15
-            jumpToggleBtn.BorderColor3 = theme.success
-            local g = Instance.new("UIGradient")
-            g.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
-            })
-            g.Rotation = 90
-            g.Parent = jumpToggleBtn
-        end
+        if jumpModule.isEnabled then jumpModule:disable() else jumpModule:enable() end
+        toggleVisual(jumpToggleBtn, jumpModule.isEnabled)
     end)
 
     espToggleBtn.MouseButton1Click:Connect(function()
-        if espModule.isEnabled then
-            espModule:disable()
-            espToggleBtn.Text = "OFF"
-            espToggleBtn.TextColor3 = theme.danger
-            espToggleBtn.BackgroundColor3 = theme.danger
-            espToggleBtn.BackgroundTransparency = 0.2
-            espToggleBtn.BorderColor3 = theme.danger
-            local g = espToggleBtn:FindFirstChildOfClass("UIGradient")
-            if g then g:Destroy() end
-        else
-            espModule:enable()
-            espToggleBtn.Text = "ON"
-            espToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            espToggleBtn.BackgroundColor3 = theme.success
-            espToggleBtn.BackgroundTransparency = 0.15
-            espToggleBtn.BorderColor3 = theme.success
-            local g = Instance.new("UIGradient")
-            g.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
-            })
-            g.Rotation = 90
-            g.Parent = espToggleBtn
-        end
+        if espModule.isEnabled then espModule:disable() else espModule:enable() end
+        toggleVisual(espToggleBtn, espModule.isEnabled)
     end)
 
     noclipToggleBtn.MouseButton1Click:Connect(function()
-        if noclipModule.isEnabled then
-            noclipModule:disable()
-            noclipToggleBtn.Text = "OFF"
-            noclipToggleBtn.TextColor3 = theme.danger
-            noclipToggleBtn.BackgroundColor3 = theme.danger
-            noclipToggleBtn.BackgroundTransparency = 0.2
-            noclipToggleBtn.BorderColor3 = theme.danger
-            local g = noclipToggleBtn:FindFirstChildOfClass("UIGradient")
-            if g then g:Destroy() end
-        else
-            noclipModule:enable()
-            noclipToggleBtn.Text = "ON"
-            noclipToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            noclipToggleBtn.BackgroundColor3 = theme.success
-            noclipToggleBtn.BackgroundTransparency = 0.15
-            noclipToggleBtn.BorderColor3 = theme.success
-            local g = Instance.new("UIGradient")
-            g.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
-            })
-            g.Rotation = 90
-            g.Parent = noclipToggleBtn
-        end
+        if noclipModule.isEnabled then noclipModule:disable() else noclipModule:enable() end
+        toggleVisual(noclipToggleBtn, noclipModule.isEnabled)
     end)
 
     hitboxToggleBtn.MouseButton1Click:Connect(function()
-        if hitboxModule.isEnabled then
-            hitboxModule:disable()
-            hitboxToggleBtn.Text = "OFF"
-            hitboxToggleBtn.TextColor3 = theme.danger
-            hitboxToggleBtn.BackgroundColor3 = theme.danger
-            hitboxToggleBtn.BackgroundTransparency = 0.2
-            hitboxToggleBtn.BorderColor3 = theme.danger
-            local g = hitboxToggleBtn:FindFirstChildOfClass("UIGradient")
-            if g then g:Destroy() end
-        else
-            hitboxModule:enable()
-            hitboxToggleBtn.Text = "ON"
-            hitboxToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            hitboxToggleBtn.BackgroundColor3 = theme.success
-            hitboxToggleBtn.BackgroundTransparency = 0.15
-            hitboxToggleBtn.BorderColor3 = theme.success
-            local g = Instance.new("UIGradient")
-            g.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
-            })
-            g.Rotation = 90
-            g.Parent = hitboxToggleBtn
-        end
+        if hitboxModule.isEnabled then hitboxModule:disable() else hitboxModule:enable() end
+        toggleVisual(hitboxToggleBtn, hitboxModule.isEnabled)
     end)
 
     hitboxViewBtn.MouseButton1Click:Connect(function()
         hitboxModule:setViewing(not hitboxModule.isViewing)
-        if hitboxModule.isViewing then
-            xOverlay1.Visible = false
-            xOverlay2.Visible = false
-            hitboxViewBtn.BorderColor3 = theme.success
-            hitboxViewBtn.TextColor3 = theme.text
-        else
-            xOverlay1.Visible = true
-            xOverlay2.Visible = true
-            hitboxViewBtn.BorderColor3 = theme.danger
-            hitboxViewBtn.TextColor3 = theme.textMuted
-        end
+        hitboxViewBtn.BorderColor3 = hitboxModule.isViewing and theme.success or theme.danger
+        hitboxViewBtn.TextColor3 = hitboxModule.isViewing and theme.text or theme.textMuted
     end)
 
     flyToggleBtn.MouseButton1Click:Connect(function()
-        if flyModule.isEnabled then
-            flyModule:disable()
-            flyToggleBtn.Text = "OFF"
-            flyToggleBtn.TextColor3 = theme.danger
-            flyToggleBtn.BackgroundColor3 = theme.danger
-            flyToggleBtn.BackgroundTransparency = 0.2
-            flyToggleBtn.BorderColor3 = theme.danger
-            local g = flyToggleBtn:FindFirstChildOfClass("UIGradient")
-            if g then g:Destroy() end
+        if flyModule.isEnabled then flyModule:disable() else flyModule:enable() end
+        toggleVisual(flyToggleBtn, flyModule.isEnabled)
+    end)
+
+    aimbotToggleBtn.MouseButton1Click:Connect(function()
+        local isOn = aimbotModule:toggle()
+        toggleVisual(aimbotToggleBtn, isOn)
+        if isOn then
+            aimbotStatusLabel.Text = "Aimbot ativo — FOV: " .. aimbotModule.fov .. "px"
+            aimbotStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
         else
-            flyModule:enable()
-            flyToggleBtn.Text = "ON"
-            flyToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            flyToggleBtn.BackgroundColor3 = theme.success
-            flyToggleBtn.BackgroundTransparency = 0.15
-            flyToggleBtn.BorderColor3 = theme.success
-            local g = Instance.new("UIGradient")
-            g.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
-            })
-            g.Rotation = 90
-            g.Parent = flyToggleBtn
+            aimbotStatusLabel.Text = "Aimbot desligado"
+            aimbotStatusLabel.TextColor3 = theme.textMuted
         end
     end)
 
@@ -3016,20 +2707,15 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- MINIMIZAR
     -- ============================================
     local isMinimized = false
-
     minBtn.MouseButton1Click:Connect(function()
         isMinimized = not isMinimized
         if isMinimized then
             content.Visible = false
-            TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 240, 0, 52)
-            }):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 240, 0, 52)}):Play()
             minBtn.Text = "+"
         else
             content.Visible = true
-            TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 240, 0, 830)
-            }):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 240, 0, 830)}):Play()
             minBtn.Text = "−"
         end
     end)
@@ -3045,6 +2731,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         pcall(function() autoPresserModule:disable() end)
         pcall(function() hitboxModule:disable() end)
         pcall(function() flyModule:disable() end)
+        pcall(function() aimbotModule:disable() end)
         gui:Destroy()
         print("❌ Painel fechado — todos os módulos desligados.")
     end)
@@ -3064,6 +2751,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             BackgroundTransparency = 0.08,
         }):Play()
     end)
+
+    return gui
 end
 
 -- ============================================
@@ -3078,13 +2767,23 @@ local noclipModule = NoclipModule.new(config)
 local autoPresserModule = AutoPresserModule.new(config)
 local hitboxModule = HitboxModule.new(config)
 local flyModule = FlyModule.new(config)
+local aimbotModule = AimbotModule.new(config)
 
 speedModule:initialize()
 
-createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule)
+local ok, err = pcall(function()
+    createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule)
+end)
 
-print("✅ Basic Settings Control v1.0 carregado!")
-print("📄 Sistema de paginação (2 páginas) com widget sempre visível")
-print("👁️ ESP com Highlight + Proxy (sem caixa vermelha)")
-print("🖱️ Auto Presser NUNCA solta ao trocar de aba")
-print("⚡ Botão de Velocidade funcionando")
+if ok then
+    print("✅ Basic Settings Control v1.8 carregado!")
+    print("🎯 AIMBOT FUNCIONAL — mira instantânea, sempre ativo quando ligado")
+    print("🎚️ Slider vertical controla o FOV (60-600px)")
+    print("◯ Botão [FOV] mostra/esconde o círculo do FOV")
+    print("📄 Sistema de paginação (2 páginas)")
+    print("👁️ ESP com Highlight + Proxy")
+    print("🖱️ Auto Presser nunca solta a tecla")
+    print("⚡ Botão de Velocidade funcionando")
+else
+    warn("❌ Erro ao criar UI: " .. tostring(err))
+end
