@@ -1,26 +1,21 @@
 --[[
-    Basic Settings Control v1.8
-    Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox Expander | Fly | Aim (pág.2)
+    Basic Settings Control v1.9.4
+    Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox | Fly | Aim | TP Click (pág.2)
+
+    v1.9.4:
+    - Restaurado o "X" vermelho no botão de olho do Hitbox Expander
+    - X aparece quando isViewing = false, desaparece quando true
+
+    v1.9.3:
+    - TP CLICK usando mouse.Hit (nativo, preciso)
+
+    v1.9:
+    - Nova seção TP CLICK na página 2 (abaixo do Aimbot)
 
     v1.8:
     - Suavidade fixa em 0 (mira instantânea)
-    - Slider vertical agora controla o FOV (60-600px)
-    - Botão pequeno [FOV] ao lado do toggle mostra/esconde o círculo do FOV
-
-    v1.7:
-    - AIMBOT reescrito seguindo a lógica do Universal Aimbot Mobile
-
-    v1.5.1:
-    - Botão AIMBOT maior (104x34) e movido para a direita (X=26)
-
-    v1.5:
-    - Emojis/ícones e acentos restaurados
-
-    v1.4:
-    - Corrigido bug que impedia a UI de abrir
-
-    v1.0:
-    - Sistema de paginação (2 páginas)
+    - Slider vertical controla o FOV
+    - Botão pequeno [FOV] mostra/esconde círculo do FOV
 --]]
 
 -- ============================================
@@ -87,7 +82,7 @@ function ConfigManager.new()
         speed = { value = 16, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
         aimbot = { fov = 120, targetPart = "Head", wallCheck = true },
-        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false, aimbot = false },
+        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false, aimbot = false, tpClick = false },
         window = { minimized = false, currentPage = 1 }
     }
     return self
@@ -1020,7 +1015,6 @@ function AimbotModule:_aimAt(target)
     if not target or not target.Character then return end
     local aimPart = target.Character:FindFirstChild(self.targetPart)
     if not aimPart then return end
-    -- Suavidade = 0 → mira instantânea
     self.camera.CFrame = CFrame.new(self.camera.CFrame.Position, aimPart.Position)
 end
 
@@ -1063,7 +1057,6 @@ function AimbotModule:toggle()
 end
 
 function AimbotModule:setFOV(sliderValue)
-    -- sliderValue 1-10 → FOV 60-600 pixels
     self.fov = math.clamp(sliderValue * 60, 60, 600)
     self.config:set("aimbot.fov", self.fov)
     if self.onFOVChanged then
@@ -1072,10 +1065,155 @@ function AimbotModule:setFOV(sliderValue)
 end
 
 -- ============================================
+-- MÓDULO TP CLICK
+-- ============================================
+
+local TPClickModule = {}
+TPClickModule.__index = TPClickModule
+
+function TPClickModule.new(config)
+    local self = setmetatable({}, TPClickModule)
+    self.config = config
+    self.isEnabled = false
+    self.ctrlHeld = false
+    self.lastTPTime = 0
+    self.COOLDOWN = 0.2
+    self.OFFSET_Y = 1
+    self.MAX_TP_DISTANCE = 500
+    self.MIN_TP_DISTANCE = 2
+    self.connections = {}
+    return self
+end
+
+function TPClickModule:_isMouseOverUI(mousePos)
+    local gui = CoreGui:FindFirstChild("BasicSettingsControlGUI")
+    if not gui then return false end
+    for _, descendant in ipairs(gui:GetDescendants()) do
+        if descendant:IsA("GuiObject") and descendant.Visible then
+            local pos = descendant.AbsolutePosition
+            local size = descendant.AbsoluteSize
+            if mousePos.X >= pos.X and mousePos.X <= pos.X + size.X
+               and mousePos.Y >= pos.Y and mousePos.Y <= pos.Y + size.Y then
+                if descendant:IsA("TextButton") or descendant:IsA("ImageButton") then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+function TPClickModule:_getTargetPosition()
+    local char = player.Character
+    if not char then return nil end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+
+    local hitCFrame = mouse.Hit
+    if not hitCFrame then return nil end
+
+    local hitPos = hitCFrame.Position
+
+    local delta = hitPos - hrp.Position
+    local horizDelta = Vector3.new(delta.X, 0, delta.Z)
+
+    if horizDelta.Magnitude < self.MIN_TP_DISTANCE then
+        return nil
+    end
+
+    if horizDelta.Magnitude > self.MAX_TP_DISTANCE then
+        horizDelta = horizDelta.Unit * self.MAX_TP_DISTANCE
+        local limitedPos = hrp.Position + horizDelta
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {char}
+        params.IgnoreWater = true
+        local downResult = workspace:Raycast(limitedPos + Vector3.new(0, 500, 0), Vector3.new(0, -2000, 0), params)
+        if downResult then
+            return downResult.Position + Vector3.new(0, self.OFFSET_Y, 0)
+        end
+        return limitedPos + Vector3.new(0, self.OFFSET_Y, 0)
+    end
+
+    return hitPos + Vector3.new(0, self.OFFSET_Y, 0)
+end
+
+function TPClickModule:_teleportTo(position)
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    pcall(function()
+        hrp.CFrame = CFrame.new(position)
+    end)
+end
+
+function TPClickModule:enable()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    self.config:set("features.tpClick", true)
+
+    table.insert(self.connections, UIS.InputBegan:Connect(function(input, gp)
+        if input.KeyCode == Enum.KeyCode.LeftControl then
+            self.ctrlHeld = true
+        end
+    end))
+
+    table.insert(self.connections, UIS.InputEnded:Connect(function(input, gp)
+        if input.KeyCode == Enum.KeyCode.LeftControl then
+            self.ctrlHeld = false
+        end
+    end))
+
+    table.insert(self.connections, UIS.InputBegan:Connect(function(input, gp)
+        if not self.isEnabled then return end
+        if not self.ctrlHeld then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        if gp then return end
+
+        local now = tick()
+        if now - self.lastTPTime < self.COOLDOWN then return end
+
+        local char = player.Character
+        if not char then return end
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then return end
+
+        local mousePos = UIS:GetMouseLocation()
+        if self:_isMouseOverUI(mousePos) then return end
+
+        local pos = self:_getTargetPosition()
+        if not pos then return end
+
+        self.lastTPTime = now
+        self:_teleportTo(pos)
+    end))
+
+    print("🌀 TP Click ATIVADO! Use Ctrl + Clique Esquerdo.")
+end
+
+function TPClickModule:disable()
+    if not self.isEnabled then return end
+    self.isEnabled = false
+    self.ctrlHeld = false
+    self.config:set("features.tpClick", false)
+    for _, conn in ipairs(self.connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    self.connections = {}
+    print("🌀 TP Click DESATIVADO!")
+end
+
+function TPClickModule:toggle()
+    if self.isEnabled then self:disable() else self:enable() end
+    return self.isEnabled
+end
+
+-- ============================================
 -- UI
 -- ============================================
 
-local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule)
+local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule, tpClickModule)
     local gui = Instance.new("ScreenGui")
     gui.Name = "BasicSettingsControlGUI"
     gui.Parent = CoreGui
@@ -1101,11 +1239,12 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         espColor = Color3.fromRGB(200, 130, 255),
         autoPresserColor = Color3.fromRGB(255, 150, 60),
         aimbotColor = Color3.fromRGB(120, 255, 160),
+        tpColor = Color3.fromRGB(80, 200, 255),
         gradient1 = Color3.fromRGB(100, 180, 255),
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== FOV CIRCLE (fora do painel, no centro da tela) =====
+    -- ===== FOV CIRCLE =====
     local fovCircle = Instance.new("Frame")
     fovCircle.Name = "FOV_Circle"
     fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1147,7 +1286,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     updateFovCircleVisual(aimbotModule.fov)
 
-    -- Callback: atualiza o círculo quando o FOV muda
     aimbotModule.onFOVChanged = function(fov)
         updateFovCircleVisual(fov)
     end
@@ -1283,7 +1421,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     subtitle.Size = UDim2.new(0.7, 0, 0, 14)
     subtitle.Position = UDim2.new(0, 44, 0, 30)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto • Hitbox • Fly • Aim"
+    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto • Hitbox • Fly • Aim • TP"
     subtitle.TextColor3 = theme.textSecondary
     subtitle.TextSize = 7
     subtitle.Font = Enum.Font.Gotham
@@ -1971,6 +2109,33 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxViewCorner.CornerRadius = UDim.new(0, 8)
     hitboxViewCorner.Parent = hitboxViewBtn
 
+    -- ✅ X vermelho (visível quando isViewing = false)
+    local xOverlay1 = Instance.new("Frame")
+    xOverlay1.Size = UDim2.new(0, 20, 0, 2)
+    xOverlay1.Position = UDim2.new(0.5, -10, 0.5, -1)
+    xOverlay1.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
+    xOverlay1.BorderSizePixel = 0
+    xOverlay1.Rotation = 45
+    xOverlay1.ZIndex = 3
+    xOverlay1.Parent = hitboxViewBtn
+
+    local xOverlay1Corner = Instance.new("UICorner")
+    xOverlay1Corner.CornerRadius = UDim.new(1, 0)
+    xOverlay1Corner.Parent = xOverlay1
+
+    local xOverlay2 = Instance.new("Frame")
+    xOverlay2.Size = UDim2.new(0, 20, 0, 2)
+    xOverlay2.Position = UDim2.new(0.5, -10, 0.5, -1)
+    xOverlay2.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
+    xOverlay2.BorderSizePixel = 0
+    xOverlay2.Rotation = -45
+    xOverlay2.ZIndex = 3
+    xOverlay2.Parent = hitboxViewBtn
+
+    local xOverlay2Corner = Instance.new("UICorner")
+    xOverlay2Corner.CornerRadius = UDim.new(1, 0)
+    xOverlay2Corner.Parent = xOverlay2
+
     local hitboxStatusLabel = Instance.new("TextLabel")
     hitboxStatusLabel.Size = UDim2.new(1, 0, 0, 16)
     hitboxStatusLabel.Position = UDim2.new(0, 0, 0, 66)
@@ -2108,7 +2273,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyBtnCorner.Parent = flyToggleBtn
 
     -- ============================================
-    -- SEÇÃO AIMBOT (PÁGINA 2)
+    -- SEÇÃO AIMBOT (PÁGINA 2) — Y=0
     -- ============================================
     local aimbotSection = Instance.new("Frame")
     aimbotSection.Size = UDim2.new(1, 0, 0, 130)
@@ -2143,7 +2308,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotContent.BackgroundTransparency = 1
     aimbotContent.Parent = aimbotSection
 
-    -- Toggle (esquerda)
     local aimbotToggleBtn = Instance.new("TextButton")
     aimbotToggleBtn.Size = UDim2.new(0, 104, 0, 34)
     aimbotToggleBtn.Position = UDim2.new(0, 26, 0.5, -17)
@@ -2161,7 +2325,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotBtnCorner.CornerRadius = UDim.new(0, 8)
     aimbotBtnCorner.Parent = aimbotToggleBtn
 
-    -- Botão pequeno de FOV (ao lado do toggle)
     local fovShowBtn = Instance.new("TextButton")
     fovShowBtn.Size = UDim2.new(0, 28, 0, 28)
     fovShowBtn.Position = UDim2.new(0, 134, 0.5, -14)
@@ -2179,7 +2342,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     fovShowBtnCorner.CornerRadius = UDim.new(0, 8)
     fovShowBtnCorner.Parent = fovShowBtn
 
-    -- Slider vertical (direita) — controla FOV
     local aimbotSliderColumn = Instance.new("Frame")
     aimbotSliderColumn.Size = UDim2.new(0, 44, 0, 88)
     aimbotSliderColumn.Position = UDim2.new(1, -52, 0, 0)
@@ -2293,8 +2455,73 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotStatusLabel.Parent = aimbotSection
 
     -- ============================================
-    -- SLIDERS — Velocidade
+    -- SEÇÃO TP CLICK (PÁGINA 2) — Y=142
     -- ============================================
+    local tpSection = Instance.new("Frame")
+    tpSection.Size = UDim2.new(1, 0, 0, 110)
+    tpSection.Position = UDim2.new(0, 0, 0, 142)
+    tpSection.BackgroundTransparency = 1
+    tpSection.Parent = page2
+
+    createAccentBar(tpSection, theme.tpColor)
+
+    local tpTitleContainer = Instance.new("Frame")
+    tpTitleContainer.Size = UDim2.new(1, -12, 0, 22)
+    tpTitleContainer.Position = UDim2.new(0, 12, 0, 0)
+    tpTitleContainer.BackgroundTransparency = 1
+    tpTitleContainer.Parent = tpSection
+
+    createSectionIcon(tpTitleContainer, "🌀", theme.tpColor)
+
+    local tpTitle = Instance.new("TextLabel")
+    tpTitle.Size = UDim2.new(1, -30, 1, 0)
+    tpTitle.Position = UDim2.new(0, 28, 0, 0)
+    tpTitle.BackgroundTransparency = 1
+    tpTitle.Text = "TP CLICK"
+    tpTitle.TextColor3 = theme.textSecondary
+    tpTitle.TextSize = 12
+    tpTitle.Font = Enum.Font.GothamBold
+    tpTitle.TextXAlignment = Enum.TextXAlignment.Left
+    tpTitle.Parent = tpTitleContainer
+
+    local tpContent = Instance.new("Frame")
+    tpContent.Size = UDim2.new(1, 0, 0, 68)
+    tpContent.Position = UDim2.new(0, 0, 0, 26)
+    tpContent.BackgroundTransparency = 1
+    tpContent.Parent = tpSection
+
+    local tpToggleBtn = Instance.new("TextButton")
+    tpToggleBtn.Size = UDim2.new(0, 104, 0, 34)
+    tpToggleBtn.Position = UDim2.new(0.5, -52, 0, 0)
+    tpToggleBtn.BackgroundColor3 = theme.danger
+    tpToggleBtn.BackgroundTransparency = 0.2
+    tpToggleBtn.Text = "OFF"
+    tpToggleBtn.TextColor3 = theme.danger
+    tpToggleBtn.TextSize = 14
+    tpToggleBtn.Font = Enum.Font.GothamBold
+    tpToggleBtn.BorderSizePixel = 2
+    tpToggleBtn.BorderColor3 = theme.danger
+    tpToggleBtn.Parent = tpContent
+
+    local tpBtnCorner = Instance.new("UICorner")
+    tpBtnCorner.CornerRadius = UDim.new(0, 8)
+    tpBtnCorner.Parent = tpToggleBtn
+
+    local tpStatusLabel = Instance.new("TextLabel")
+    tpStatusLabel.Size = UDim2.new(1, 0, 0, 14)
+    tpStatusLabel.Position = UDim2.new(0, 0, 0, 42)
+    tpStatusLabel.BackgroundTransparency = 1
+    tpStatusLabel.Text = "Ctrl + Clique Esquerdo"
+    tpStatusLabel.TextColor3 = theme.textMuted
+    tpStatusLabel.TextSize = 10
+    tpStatusLabel.Font = Enum.Font.Gotham
+    tpStatusLabel.Parent = tpContent
+
+    -- ============================================
+    -- SLIDERS
+    -- ============================================
+
+    -- Velocidade
     local speedIsActive = false
     local speedMin, speedMax = 5, 500
     local currentSpeedValue = speedModule.currentSpeed or 16
@@ -2356,9 +2583,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- ============================================
-    -- SLIDERS — Fly
-    -- ============================================
+    -- Fly
     local flyMin, flyMax = 1, 10
     local currentFlyValue = flyModule.speed or 1
     local flyDragging = false
@@ -2419,9 +2644,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- ============================================
-    -- SLIDER — AIMBOT (vertical, controla FOV)
-    -- ============================================
+    -- Aimbot
     local aimbotMin, aimbotMax = 1, 10
     local currentAimbotValue = math.clamp(math.floor((aimbotModule.fov or 120) / 60 + 0.5), 1, 10)
     local aimbotDragging = false
@@ -2472,7 +2695,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- Handler do botão de mostrar FOV
+    -- FOV Show button
     local isShowingFOV = false
     fovShowBtn.MouseButton1Click:Connect(function()
         isShowingFOV = not isShowingFOV
@@ -2680,10 +2903,20 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         toggleVisual(hitboxToggleBtn, hitboxModule.isEnabled)
     end)
 
+    -- ✅ Handler com o X
     hitboxViewBtn.MouseButton1Click:Connect(function()
         hitboxModule:setViewing(not hitboxModule.isViewing)
-        hitboxViewBtn.BorderColor3 = hitboxModule.isViewing and theme.success or theme.danger
-        hitboxViewBtn.TextColor3 = hitboxModule.isViewing and theme.text or theme.textMuted
+        if hitboxModule.isViewing then
+            xOverlay1.Visible = false
+            xOverlay2.Visible = false
+            hitboxViewBtn.BorderColor3 = theme.success
+            hitboxViewBtn.TextColor3 = theme.text
+        else
+            xOverlay1.Visible = true
+            xOverlay2.Visible = true
+            hitboxViewBtn.BorderColor3 = theme.danger
+            hitboxViewBtn.TextColor3 = theme.textMuted
+        end
     end)
 
     flyToggleBtn.MouseButton1Click:Connect(function()
@@ -2700,6 +2933,18 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         else
             aimbotStatusLabel.Text = "Aimbot desligado"
             aimbotStatusLabel.TextColor3 = theme.textMuted
+        end
+    end)
+
+    tpToggleBtn.MouseButton1Click:Connect(function()
+        local isOn = tpClickModule:toggle()
+        toggleVisual(tpToggleBtn, isOn)
+        if isOn then
+            tpStatusLabel.Text = "Ativo — Ctrl + Clique Esquerdo"
+            tpStatusLabel.TextColor3 = Color3.fromRGB(180, 230, 255)
+        else
+            tpStatusLabel.Text = "Ctrl + Clique Esquerdo"
+            tpStatusLabel.TextColor3 = theme.textMuted
         end
     end)
 
@@ -2732,6 +2977,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         pcall(function() hitboxModule:disable() end)
         pcall(function() flyModule:disable() end)
         pcall(function() aimbotModule:disable() end)
+        pcall(function() tpClickModule:disable() end)
         gui:Destroy()
         print("❌ Painel fechado — todos os módulos desligados.")
     end)
@@ -2768,22 +3014,20 @@ local autoPresserModule = AutoPresserModule.new(config)
 local hitboxModule = HitboxModule.new(config)
 local flyModule = FlyModule.new(config)
 local aimbotModule = AimbotModule.new(config)
+local tpClickModule = TPClickModule.new(config)
 
 speedModule:initialize()
 
 local ok, err = pcall(function()
-    createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule)
+    createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule, tpClickModule)
 end)
 
 if ok then
-    print("✅ Basic Settings Control v1.8 carregado!")
-    print("🎯 AIMBOT FUNCIONAL — mira instantânea, sempre ativo quando ligado")
-    print("🎚️ Slider vertical controla o FOV (60-600px)")
-    print("◯ Botão [FOV] mostra/esconde o círculo do FOV")
+    print("✅ Basic Settings Control v1.9.4 carregado!")
+    print("👁️ X vermelho restaurado no botão de olho do Hitbox")
+    print("🌀 TP CLICK usando mouse.Hit (nativo, preciso)")
+    print("🎯 AIMBOT funcional com slider de FOV")
     print("📄 Sistema de paginação (2 páginas)")
-    print("👁️ ESP com Highlight + Proxy")
-    print("🖱️ Auto Presser nunca solta a tecla")
-    print("⚡ Botão de Velocidade funcionando")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
 end
