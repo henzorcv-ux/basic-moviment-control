@@ -1,21 +1,28 @@
 --[[
-    Basic Settings Control v1.9.4
-    Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox | Fly | Aim | TP Click (pág.2)
+    Basic Settings Control v1.0
+    Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox | Fly | Aim | TP Click (pág.2) | Anti-AFK
+
+    v1.9.9:
+    - Som adicionado ao toggle do Auto Presser (estava faltando)
+
+    v1.9.8:
+    - Sistema de som adicionado: toca em todos os botões, exceto sliders
+    - ID público temporário (troque pelo seu quando subir)
+
+    v1.9.7:
+    - Botões do Aimbot e da paginação ajustados proporcionalmente ao painel 220x810
+
+    v1.9.6:
+    - Painel reduzido de 240x830 para 220x810
+
+    v1.9.5:
+    - Anti-AFK adicionado (sempre ativo)
 
     v1.9.4:
     - Restaurado o "X" vermelho no botão de olho do Hitbox Expander
-    - X aparece quando isViewing = false, desaparece quando true
 
     v1.9.3:
     - TP CLICK usando mouse.Hit (nativo, preciso)
-
-    v1.9:
-    - Nova seção TP CLICK na página 2 (abaixo do Aimbot)
-
-    v1.8:
-    - Suavidade fixa em 0 (mira instantânea)
-    - Slider vertical controla o FOV
-    - Botão pequeno [FOV] mostra/esconde círculo do FOV
 --]]
 
 -- ============================================
@@ -33,6 +40,19 @@ local Players, UIS, CoreGui, RunService, VirtualUser, TweenService, VirtualInput
 
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
+
+-- ============================================
+-- ANTI-AFK (sempre ativo, sem seção no painel)
+-- ============================================
+
+local antiAfkConnection = player.Idled:Connect(function()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end)
+
+print("🛡️ Anti-AFK ativado (sempre ligado)")
 
 -- ============================================
 -- EVENT BUS
@@ -1244,6 +1264,22 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
+    -- ===== SISTEMA DE SOM =====
+    -- Troque o ID abaixo pelo seu áudio quando subir no Creator Dashboard
+    local CLICK_SOUND_ID = "rbxassetid://452267918"  -- UI Click (público)
+    local CLICK_VOLUME = 0.5                          -- Volume médio
+
+    local function playClickSound()
+        pcall(function()
+            local sound = Instance.new("Sound")
+            sound.SoundId = CLICK_SOUND_ID
+            sound.Volume = CLICK_VOLUME
+            sound.Parent = gui
+            sound:Play()
+            game:GetService("Debris"):AddItem(sound, 2)
+        end)
+    end
+
     -- ===== FOV CIRCLE =====
     local fovCircle = Instance.new("Frame")
     fovCircle.Name = "FOV_Circle"
@@ -1292,8 +1328,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     -- ===== MAIN FRAME =====
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 240, 0, 830)
-    mainFrame.Position = UDim2.new(0.5, -120, 0.5, -415)
+    mainFrame.Size = UDim2.new(0, 220, 0, 810)
+    mainFrame.Position = UDim2.new(0.5, -110, 0.5, -405)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 0
@@ -1421,7 +1457,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     subtitle.Size = UDim2.new(0.7, 0, 0, 14)
     subtitle.Position = UDim2.new(0, 44, 0, 30)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto • Hitbox • Fly • Aim • TP"
+    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto • Hitbox • Fly • Aim • TP • Anti-AFK"
     subtitle.TextColor3 = theme.textSecondary
     subtitle.TextSize = 7
     subtitle.Font = Enum.Font.Gotham
@@ -1511,8 +1547,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     -- ===== PAGINATION =====
     local paginationWidget = Instance.new("Frame")
-    paginationWidget.Size = UDim2.new(0, 76, 0, 22)
-    paginationWidget.Position = UDim2.new(1, -78, 0, -4)
+    paginationWidget.Size = UDim2.new(0, 70, 0, 22)
+    paginationWidget.Position = UDim2.new(1, -72, 0, -4)
     paginationWidget.BackgroundColor3 = theme.surface2
     paginationWidget.BackgroundTransparency = 0.3
     paginationWidget.BorderSizePixel = 0
@@ -1530,7 +1566,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     pagStroke.Parent = paginationWidget
 
     local prevPageBtn = Instance.new("TextButton")
-    prevPageBtn.Size = UDim2.new(0, 20, 1, 0)
+    prevPageBtn.Size = UDim2.new(0, 18, 1, 0)
     prevPageBtn.BackgroundTransparency = 1
     prevPageBtn.Text = "‹"
     prevPageBtn.TextColor3 = theme.textSecondary
@@ -1540,8 +1576,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     prevPageBtn.Parent = paginationWidget
 
     local nextPageBtn = Instance.new("TextButton")
-    nextPageBtn.Size = UDim2.new(0, 20, 1, 0)
-    nextPageBtn.Position = UDim2.new(1, -20, 0, 0)
+    nextPageBtn.Size = UDim2.new(0, 18, 1, 0)
+    nextPageBtn.Position = UDim2.new(1, -18, 0, 0)
     nextPageBtn.BackgroundTransparency = 1
     nextPageBtn.Text = "›"
     nextPageBtn.TextColor3 = theme.textSecondary
@@ -1551,8 +1587,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     nextPageBtn.Parent = paginationWidget
 
     local pageIndicator = Instance.new("TextLabel")
-    pageIndicator.Size = UDim2.new(1, -40, 1, 0)
-    pageIndicator.Position = UDim2.new(0, 20, 0, 0)
+    pageIndicator.Size = UDim2.new(1, -36, 1, 0)
+    pageIndicator.Position = UDim2.new(0, 18, 0, 0)
     pageIndicator.BackgroundTransparency = 1
     pageIndicator.Text = "1/2"
     pageIndicator.TextColor3 = theme.textMuted
@@ -2109,7 +2145,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxViewCorner.CornerRadius = UDim.new(0, 8)
     hitboxViewCorner.Parent = hitboxViewBtn
 
-    -- ✅ X vermelho (visível quando isViewing = false)
     local xOverlay1 = Instance.new("Frame")
     xOverlay1.Size = UDim2.new(0, 20, 0, 2)
     xOverlay1.Position = UDim2.new(0.5, -10, 0.5, -1)
@@ -2309,8 +2344,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotContent.Parent = aimbotSection
 
     local aimbotToggleBtn = Instance.new("TextButton")
-    aimbotToggleBtn.Size = UDim2.new(0, 104, 0, 34)
-    aimbotToggleBtn.Position = UDim2.new(0, 26, 0.5, -17)
+    aimbotToggleBtn.Size = UDim2.new(0, 90, 0, 34)
+    aimbotToggleBtn.Position = UDim2.new(0, 20, 0.5, -17)
     aimbotToggleBtn.BackgroundColor3 = theme.danger
     aimbotToggleBtn.BackgroundTransparency = 0.2
     aimbotToggleBtn.Text = "OFF"
@@ -2326,8 +2361,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotBtnCorner.Parent = aimbotToggleBtn
 
     local fovShowBtn = Instance.new("TextButton")
-    fovShowBtn.Size = UDim2.new(0, 28, 0, 28)
-    fovShowBtn.Position = UDim2.new(0, 134, 0.5, -14)
+    fovShowBtn.Size = UDim2.new(0, 26, 0, 28)
+    fovShowBtn.Position = UDim2.new(0, 112, 0.5, -14)
     fovShowBtn.BackgroundColor3 = theme.surface2
     fovShowBtn.BackgroundTransparency = 0.3
     fovShowBtn.Text = "◯"
@@ -2491,8 +2526,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     tpContent.Parent = tpSection
 
     local tpToggleBtn = Instance.new("TextButton")
-    tpToggleBtn.Size = UDim2.new(0, 104, 0, 34)
-    tpToggleBtn.Position = UDim2.new(0.5, -52, 0, 0)
+    tpToggleBtn.Size = UDim2.new(0, 90, 0, 34)
+    tpToggleBtn.Position = UDim2.new(0.5, -45, 0, 0)
     tpToggleBtn.BackgroundColor3 = theme.danger
     tpToggleBtn.BackgroundTransparency = 0.2
     tpToggleBtn.Text = "OFF"
@@ -2698,6 +2733,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- FOV Show button
     local isShowingFOV = false
     fovShowBtn.MouseButton1Click:Connect(function()
+        playClickSound()
         isShowingFOV = not isShowingFOV
         fovCircle.Visible = isShowingFOV
         if isShowingFOV then
@@ -2745,9 +2781,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     end
 
     prevPageBtn.MouseButton1Click:Connect(function()
+        playClickSound()
         if currentPage > 1 then switchPage(currentPage - 1) end
     end)
     nextPageBtn.MouseButton1Click:Connect(function()
+        playClickSound()
         if currentPage < totalPages then switchPage(currentPage + 1) end
     end)
 
@@ -2794,7 +2832,9 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     autoPresserModule.onHoldChanged = function() updateAutoStatus() end
 
+    -- ✅ SOM ADICIONADO AQUI NO AUTO PRESSER
     autoToggleBtn.MouseButton1Click:Connect(function()
+        playClickSound()
         autoPresserModule:toggle()
         updateAutoStatus()
     end)
@@ -2846,13 +2886,20 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end)
     end
 
-    toggleKeyBtn.MouseButton1Click:Connect(function() startCapturing("toggle") end)
-    pressKeyBtn.MouseButton1Click:Connect(function() startCapturing("press") end)
+    toggleKeyBtn.MouseButton1Click:Connect(function()
+        playClickSound()
+        startCapturing("toggle")
+    end)
+    pressKeyBtn.MouseButton1Click:Connect(function()
+        playClickSound()
+        startCapturing("press")
+    end)
 
     -- ============================================
     -- HANDLERS DOS TOGGLES
     -- ============================================
     local function toggleVisual(btn, isOn)
+        playClickSound()
         if isOn then
             btn.Text = "ON"
             btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -2903,8 +2950,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         toggleVisual(hitboxToggleBtn, hitboxModule.isEnabled)
     end)
 
-    -- ✅ Handler com o X
     hitboxViewBtn.MouseButton1Click:Connect(function()
+        playClickSound()
         hitboxModule:setViewing(not hitboxModule.isViewing)
         if hitboxModule.isViewing then
             xOverlay1.Visible = false
@@ -2953,14 +3000,15 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- ============================================
     local isMinimized = false
     minBtn.MouseButton1Click:Connect(function()
+        playClickSound()
         isMinimized = not isMinimized
         if isMinimized then
             content.Visible = false
-            TweenService:Create(mainFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 240, 0, 52)}):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 220, 0, 52)}):Play()
             minBtn.Text = "+"
         else
             content.Visible = true
-            TweenService:Create(mainFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 240, 0, 830)}):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 220, 0, 810)}):Play()
             minBtn.Text = "−"
         end
     end)
@@ -2969,6 +3017,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- FECHAR
     -- ============================================
     closeBtn.MouseButton1Click:Connect(function()
+        playClickSound()
         pcall(function() speedModule:disable() end)
         pcall(function() jumpModule:disable() end)
         pcall(function() espModule:disable() end)
@@ -2986,14 +3035,14 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- EFEITO DE ENTRADA
     -- ============================================
     mainFrame.BackgroundTransparency = 1
-    mainFrame.Size = UDim2.new(0, 220, 0, 770)
-    mainFrame.Position = UDim2.new(0.5, -110, 0.5, -385)
+    mainFrame.Size = UDim2.new(0, 200, 0, 750)
+    mainFrame.Position = UDim2.new(0.5, -100, 0.5, -375)
 
     task.spawn(function()
         task.wait(0.1)
         TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 240, 0, 830),
-            Position = UDim2.new(0.5, -120, 0.5, -415),
+            Size = UDim2.new(0, 220, 0, 810),
+            Position = UDim2.new(0.5, -110, 0.5, -405),
             BackgroundTransparency = 0.08,
         }):Play()
     end)
@@ -3023,11 +3072,13 @@ local ok, err = pcall(function()
 end)
 
 if ok then
-    print("✅ Basic Settings Control v1.9.4 carregado!")
-    print("👁️ X vermelho restaurado no botão de olho do Hitbox")
+    print("✅ Basic Settings Control v1.9.9 carregado!")
+    print("🔊 Som em todos os botões (inclusive Auto Presser)")
+    print("📐 Painel 220x810 com botões proporcionais")
+    print("🛡️ Anti-AFK ativo (sempre ligado)")
+    print("👁️ X vermelho no botão de olho do Hitbox")
     print("🌀 TP CLICK usando mouse.Hit (nativo, preciso)")
     print("🎯 AIMBOT funcional com slider de FOV")
-    print("📄 Sistema de paginação (2 páginas)")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
 end
