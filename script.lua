@@ -81,7 +81,7 @@ ConfigManager.__index = ConfigManager
 function ConfigManager.new()
     local self = setmetatable({}, ConfigManager)
     self.data = {
-        speed = { value = 25, min = 5, max = 500 },
+        speed = { value = 30, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
         aimbot = { fov = 120, targetPart = "Head", wallCheck = true },
         features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false, aimbot = false, tpClick = false, invisible = false },
@@ -120,7 +120,7 @@ SpeedModule.__index = SpeedModule
 function SpeedModule.new(config)
     local self = setmetatable({}, SpeedModule)
     self.config, self.eventBus = config, EventBus.new()
-    self.isEnabled, self.currentSpeed = false, config:get("speed.value") or 25
+    self.isEnabled, self.currentSpeed = false, config:get("speed.value") or 30
     self.defaultSpeed = 16
     self.character, self.humanoid, self.originalSpeed = nil, nil, nil
     self.velocityCheckConnection = nil
