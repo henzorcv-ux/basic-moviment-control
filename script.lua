@@ -1,28 +1,10 @@
 --[[
-    Basic Settings Control v1.0
-    Velocidade | Pulo | ESP | Noclip | Auto Presser | Hitbox | Fly | Aim | TP Click (pág.2) | Anti-AFK
+    Basic Settings Control v2.0.9
+    Velocidade | Pulo | ESP | Noclip | Auto Presser | Fly (pág.1) | Aim | TP Click | Hitbox | Invisible (pág.2) | Anti-AFK
 
-    v1.9.9:
-    - Som adicionado ao toggle do Auto Presser (estava faltando)
-
-    v1.9.8:
-    - Sistema de som adicionado: toca em todos os botões, exceto sliders
-    - ID público temporário (troque pelo seu quando subir)
-
-    v1.9.7:
-    - Botões do Aimbot e da paginação ajustados proporcionalmente ao painel 220x810
-
-    v1.9.6:
-    - Painel reduzido de 240x830 para 220x810
-
-    v1.9.5:
-    - Anti-AFK adicionado (sempre ativo)
-
-    v1.9.4:
-    - Restaurado o "X" vermelho no botão de olho do Hitbox Expander
-
-    v1.9.3:
-    - TP CLICK usando mouse.Hit (nativo, preciso)
+    v2.0.9:
+    - Correção no TP Click: Altura dinâmica (evita afundar e travar em personagens pequenos/grandes)
+    - TP Click zera inércia e força estado Running do Humanoid
 --]]
 
 -- ============================================
@@ -42,7 +24,7 @@ local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
 -- ============================================
--- ANTI-AFK (sempre ativo, sem seção no painel)
+-- ANTI-AFK
 -- ============================================
 
 local antiAfkConnection = player.Idled:Connect(function()
@@ -99,10 +81,10 @@ ConfigManager.__index = ConfigManager
 function ConfigManager.new()
     local self = setmetatable({}, ConfigManager)
     self.data = {
-        speed = { value = 16, min = 5, max = 500 },
+        speed = { value = 25, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
         aimbot = { fov = 120, targetPart = "Head", wallCheck = true },
-        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false, aimbot = false, tpClick = false },
+        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false, aimbot = false, tpClick = false, invisible = false },
         window = { minimized = false, currentPage = 1 }
     }
     return self
@@ -138,7 +120,7 @@ SpeedModule.__index = SpeedModule
 function SpeedModule.new(config)
     local self = setmetatable({}, SpeedModule)
     self.config, self.eventBus = config, EventBus.new()
-    self.isEnabled, self.currentSpeed = false, config:get("speed.value") or 16
+    self.isEnabled, self.currentSpeed = false, config:get("speed.value") or 25
     self.defaultSpeed = 16
     self.character, self.humanoid, self.originalSpeed = nil, nil, nil
     self.velocityCheckConnection = nil
@@ -847,6 +829,80 @@ function HitboxModule:setViewing(state)
 end
 
 -- ============================================
+-- MÓDULO INVISIBLE
+-- ============================================
+
+local InvisibleModule = {}
+InvisibleModule.__index = InvisibleModule
+
+function InvisibleModule.new(config)
+    local self = setmetatable({}, InvisibleModule)
+    self.config = config
+    self.isEnabled = false
+    self.originalTransparencies = {}
+    self.characterAddedConn = nil
+    return self
+end
+
+function InvisibleModule:applyInvisibility()
+    local char = player.Character
+    if not char then return end
+    
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if not self.originalTransparencies[part] then
+                self.originalTransparencies[part] = part.Transparency
+            end
+            part.Transparency = 1
+        elseif part:IsA("Decal") or part:IsA("Texture") or part:IsA("BillboardGui") then
+            if not self.originalTransparencies[part] then
+                self.originalTransparencies[part] = part.Transparency
+            end
+            part.Transparency = 1
+        end
+    end
+end
+
+function InvisibleModule:restoreVisibility()
+    for part, trans in pairs(self.originalTransparencies) do
+        pcall(function()
+            if part and part.Parent then
+                part.Transparency = trans
+            end
+        end)
+    end
+    self.originalTransparencies = {}
+end
+
+function InvisibleModule:enable()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    self.config:set("features.invisible", true)
+    self:applyInvisibility()
+    
+    if self.characterAddedConn then self.characterAddedConn:Disconnect() end
+    self.characterAddedConn = player.CharacterAdded:Connect(function()
+        task.wait(1)
+        if self.isEnabled then self:applyInvisibility() end
+    end)
+    print("👤 Invisibilidade ATIVADA!")
+end
+
+function InvisibleModule:disable()
+    if not self.isEnabled then return end
+    self.isEnabled = false
+    self.config:set("features.invisible", false)
+    if self.characterAddedConn then self.characterAddedConn:Disconnect() self.characterAddedConn = nil end
+    self:restoreVisibility()
+    print("👤 Invisibilidade DESATIVADA!")
+end
+
+function InvisibleModule:toggle()
+    if self.isEnabled then self:disable() else self:enable() end
+    return self.isEnabled
+end
+
+-- ============================================
 -- MÓDULO FLY
 -- ============================================
 
@@ -1056,7 +1112,7 @@ function AimbotModule:enable()
             self.currentTarget = nil
         end
     end)
-    print("🎯 Aimbot ATIVADO! FOV: " .. self.fov .. "px")
+    print("🤖 Aimbot ATIVADO! FOV: " .. self.fov .. "px")
 end
 
 function AimbotModule:disable()
@@ -1068,7 +1124,7 @@ function AimbotModule:disable()
         self.connection:Disconnect()
         self.connection = nil
     end
-    print("🎯 Aimbot DESATIVADO!")
+    print("🤖 Aimbot DESATIVADO!")
 end
 
 function AimbotModule:toggle()
@@ -1098,7 +1154,6 @@ function TPClickModule.new(config)
     self.ctrlHeld = false
     self.lastTPTime = 0
     self.COOLDOWN = 0.2
-    self.OFFSET_Y = 1
     self.MAX_TP_DISTANCE = 500
     self.MIN_TP_DISTANCE = 2
     self.connections = {}
@@ -1123,6 +1178,17 @@ function TPClickModule:_isMouseOverUI(mousePos)
     return false
 end
 
+function TPClickModule:_getGroundOffset()
+    local char = player.Character
+    if not char then return 3 end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return 3 end
+    
+    -- Distância do centro do HRP até o chão baseada no tamanho real do personagem
+    return hum.HipHeight + (hrp.Size.Y / 2)
+end
+
 function TPClickModule:_getTargetPosition()
     local char = player.Character
     if not char then return nil end
@@ -1133,13 +1199,14 @@ function TPClickModule:_getTargetPosition()
     if not hitCFrame then return nil end
 
     local hitPos = hitCFrame.Position
-
     local delta = hitPos - hrp.Position
     local horizDelta = Vector3.new(delta.X, 0, delta.Z)
 
     if horizDelta.Magnitude < self.MIN_TP_DISTANCE then
         return nil
     end
+
+    local finalPos
 
     if horizDelta.Magnitude > self.MAX_TP_DISTANCE then
         horizDelta = horizDelta.Unit * self.MAX_TP_DISTANCE
@@ -1150,21 +1217,38 @@ function TPClickModule:_getTargetPosition()
         params.IgnoreWater = true
         local downResult = workspace:Raycast(limitedPos + Vector3.new(0, 500, 0), Vector3.new(0, -2000, 0), params)
         if downResult then
-            return downResult.Position + Vector3.new(0, self.OFFSET_Y, 0)
+            finalPos = downResult.Position
+        else
+            finalPos = limitedPos - Vector3.new(0, 3, 0) -- fallback
         end
-        return limitedPos + Vector3.new(0, self.OFFSET_Y, 0)
+    else
+        finalPos = hitPos
     end
-
-    return hitPos + Vector3.new(0, self.OFFSET_Y, 0)
+    
+    -- Soma o offset dinâmico baseado no HipHeight do jogador (evita afundar no chão)
+    local groundOffset = self:_getGroundOffset()
+    return finalPos + Vector3.new(0, groundOffset + 0.5, 0)
 end
 
 function TPClickModule:_teleportTo(position)
     local char = player.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
     if not hrp then return end
+
     pcall(function()
         hrp.CFrame = CFrame.new(position)
+        -- Reseta inércia para não herdar velocidade
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        
+        -- Força estado Running para destravar o movimento
+        if hum then
+            if hum:GetState() ~= Enum.HumanoidStateType.Jumping and hum:GetState() ~= Enum.HumanoidStateType.Freefall then
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end
     end)
 end
 
@@ -1233,7 +1317,7 @@ end
 -- UI
 -- ============================================
 
-local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule, tpClickModule)
+local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, invisibleModule, flyModule, aimbotModule, tpClickModule)
     local gui = Instance.new("ScreenGui")
     gui.Name = "BasicSettingsControlGUI"
     gui.Parent = CoreGui
@@ -1260,14 +1344,13 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         autoPresserColor = Color3.fromRGB(255, 150, 60),
         aimbotColor = Color3.fromRGB(120, 255, 160),
         tpColor = Color3.fromRGB(80, 200, 255),
+        invisibleColor = Color3.fromRGB(200, 200, 200),
         gradient1 = Color3.fromRGB(100, 180, 255),
         gradient2 = Color3.fromRGB(180, 100, 255),
     }
 
-    -- ===== SISTEMA DE SOM =====
-    -- Troque o ID abaixo pelo seu áudio quando subir no Creator Dashboard
-    local CLICK_SOUND_ID = "rbxassetid://452267918"  -- UI Click (público)
-    local CLICK_VOLUME = 0.5                          -- Volume médio
+    local CLICK_SOUND_ID = "rbxassetid://452267918"
+    local CLICK_VOLUME = 0.5
 
     local function playClickSound()
         pcall(function()
@@ -1280,7 +1363,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end)
     end
 
-    -- ===== FOV CIRCLE =====
     local fovCircle = Instance.new("Frame")
     fovCircle.Name = "FOV_Circle"
     fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1326,10 +1408,9 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         updateFovCircleVisual(fov)
     end
 
-    -- ===== MAIN FRAME =====
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 220, 0, 810)
-    mainFrame.Position = UDim2.new(0.5, -110, 0.5, -405)
+    mainFrame.Size = UDim2.new(0, 220, 0, 720)
+    mainFrame.Position = UDim2.new(0.5, -110, 0.5, -360)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 0
@@ -1367,7 +1448,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- ===== HEADER =====
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 52)
     header.BackgroundColor3 = theme.surface
@@ -1457,7 +1537,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     subtitle.Size = UDim2.new(0.7, 0, 0, 14)
     subtitle.Position = UDim2.new(0, 44, 0, 30)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto • Hitbox • Fly • Aim • TP • Anti-AFK"
+    subtitle.Text = "Velocidade • Pulo • ESP • Noclip • Auto • Fly • Aim • TP • Hitbox • Invisible • Anti-AFK"
     subtitle.TextColor3 = theme.textSecondary
     subtitle.TextSize = 7
     subtitle.Font = Enum.Font.Gotham
@@ -1502,7 +1582,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     closeCorner.CornerRadius = UDim.new(0, 6)
     closeCorner.Parent = closeBtn
 
-    -- Drag
     local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
     header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1532,7 +1611,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     content.BackgroundTransparency = 1
     content.Parent = mainFrame
 
-    -- ===== PAGES =====
     local page1 = Instance.new("Frame")
     page1.Size = UDim2.new(1, 0, 1, 0)
     page1.BackgroundTransparency = 1
@@ -1545,7 +1623,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     page2.Visible = false
     page2.Parent = content
 
-    -- ===== PAGINATION =====
     local paginationWidget = Instance.new("Frame")
     paginationWidget.Size = UDim2.new(0, 70, 0, 22)
     paginationWidget.Position = UDim2.new(1, -72, 0, -4)
@@ -1597,7 +1674,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     pageIndicator.ZIndex = 51
     pageIndicator.Parent = paginationWidget
 
-    -- Helpers
     local function createSectionIcon(parent, emoji, color)
         local iconBg = Instance.new("Frame")
         iconBg.Size = UDim2.new(0, 20, 0, 20)
@@ -1656,7 +1732,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     end
 
     -- ============================================
-    -- SEÇÃO VELOCIDADE
+    -- VELOCIDADE
     -- ============================================
     local speedSection = Instance.new("Frame")
     speedSection.Size = UDim2.new(1, 0, 0, 132)
@@ -1707,7 +1783,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedValue.Size = UDim2.new(1, 0, 0.7, 0)
     speedValue.Position = UDim2.new(0, 0, 0.15, 0)
     speedValue.BackgroundTransparency = 1
-    speedValue.Text = "16"
+    speedValue.Text = "25"
     speedValue.TextColor3 = theme.accent
     speedValue.TextSize = 24
     speedValue.Font = Enum.Font.GothamBold
@@ -1795,7 +1871,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     speedToggleCorner.Parent = speedToggleBtn
 
     -- ============================================
-    -- SEÇÃO PULO
+    -- PULO
     -- ============================================
     local jumpSection = Instance.new("Frame")
     jumpSection.Size = UDim2.new(1, 0, 0, 80)
@@ -1852,7 +1928,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     jumpStatusLabel.Parent = jumpSection
 
     -- ============================================
-    -- SEÇÃO ESP
+    -- ESP
     -- ============================================
     local espSection = Instance.new("Frame")
     espSection.Size = UDim2.new(1, 0, 0, 84)
@@ -1909,7 +1985,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     espStatusLabel.Parent = espSection
 
     -- ============================================
-    -- SEÇÃO NOCLIP
+    -- NOCLIP
     -- ============================================
     local noclipSection = Instance.new("Frame")
     noclipSection.Size = UDim2.new(1, 0, 0, 84)
@@ -1966,7 +2042,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipStatusLabel.Parent = noclipSection
 
     -- ============================================
-    -- SEÇÃO AUTO PRESSER
+    -- AUTO PRESSER
     -- ============================================
     local autoSection = Instance.new("Frame")
     autoSection.Size = UDim2.new(1, 0, 0, 128)
@@ -2082,111 +2158,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     pKeyCaption.Parent = keySelectorContainer
 
     -- ============================================
-    -- SEÇÃO HITBOX
-    -- ============================================
-    local hitboxSection = Instance.new("Frame")
-    hitboxSection.Size = UDim2.new(1, 0, 0, 84)
-    hitboxSection.Position = UDim2.new(0, 0, 0, 532)
-    hitboxSection.BackgroundTransparency = 1
-    hitboxSection.Parent = page1
-
-    createAccentBar(hitboxSection, theme.hitboxColor)
-
-    local hitboxTitleContainer = Instance.new("Frame")
-    hitboxTitleContainer.Size = UDim2.new(1, -12, 0, 22)
-    hitboxTitleContainer.Position = UDim2.new(0, 12, 0, 0)
-    hitboxTitleContainer.BackgroundTransparency = 1
-    hitboxTitleContainer.Parent = hitboxSection
-
-    createSectionIcon(hitboxTitleContainer, "🎯", theme.hitboxColor)
-
-    local hitboxTitle = Instance.new("TextLabel")
-    hitboxTitle.Size = UDim2.new(1, -30, 1, 0)
-    hitboxTitle.Position = UDim2.new(0, 28, 0, 0)
-    hitboxTitle.BackgroundTransparency = 1
-    hitboxTitle.Text = "HITBOX EXPANDER"
-    hitboxTitle.TextColor3 = theme.textSecondary
-    hitboxTitle.TextSize = 12
-    hitboxTitle.Font = Enum.Font.GothamBold
-    hitboxTitle.TextXAlignment = Enum.TextXAlignment.Left
-    hitboxTitle.Parent = hitboxTitleContainer
-
-    local hitboxToggleBtn = Instance.new("TextButton")
-    hitboxToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    hitboxToggleBtn.Position = UDim2.new(0.5, -48, 0, 26)
-    hitboxToggleBtn.BackgroundColor3 = theme.danger
-    hitboxToggleBtn.BackgroundTransparency = 0.2
-    hitboxToggleBtn.Text = "OFF"
-    hitboxToggleBtn.TextColor3 = theme.danger
-    hitboxToggleBtn.TextSize = 13
-    hitboxToggleBtn.Font = Enum.Font.GothamBold
-    hitboxToggleBtn.BorderSizePixel = 2
-    hitboxToggleBtn.BorderColor3 = theme.danger
-    hitboxToggleBtn.Parent = hitboxSection
-
-    local hitboxBtnCorner = Instance.new("UICorner")
-    hitboxBtnCorner.CornerRadius = UDim.new(0, 8)
-    hitboxBtnCorner.Parent = hitboxToggleBtn
-
-    local hitboxViewBtn = Instance.new("TextButton")
-    hitboxViewBtn.Size = UDim2.new(0, 30, 0, 30)
-    hitboxViewBtn.Position = UDim2.new(0.5, 48, 0, 26)
-    hitboxViewBtn.BackgroundColor3 = theme.surface2
-    hitboxViewBtn.BackgroundTransparency = 0.3
-    hitboxViewBtn.Text = "👁"
-    hitboxViewBtn.TextColor3 = theme.textMuted
-    hitboxViewBtn.TextSize = 16
-    hitboxViewBtn.Font = Enum.Font.GothamBold
-    hitboxViewBtn.BorderSizePixel = 2
-    hitboxViewBtn.BorderColor3 = theme.danger
-    hitboxViewBtn.Parent = hitboxSection
-
-    local hitboxViewCorner = Instance.new("UICorner")
-    hitboxViewCorner.CornerRadius = UDim.new(0, 8)
-    hitboxViewCorner.Parent = hitboxViewBtn
-
-    local xOverlay1 = Instance.new("Frame")
-    xOverlay1.Size = UDim2.new(0, 20, 0, 2)
-    xOverlay1.Position = UDim2.new(0.5, -10, 0.5, -1)
-    xOverlay1.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
-    xOverlay1.BorderSizePixel = 0
-    xOverlay1.Rotation = 45
-    xOverlay1.ZIndex = 3
-    xOverlay1.Parent = hitboxViewBtn
-
-    local xOverlay1Corner = Instance.new("UICorner")
-    xOverlay1Corner.CornerRadius = UDim.new(1, 0)
-    xOverlay1Corner.Parent = xOverlay1
-
-    local xOverlay2 = Instance.new("Frame")
-    xOverlay2.Size = UDim2.new(0, 20, 0, 2)
-    xOverlay2.Position = UDim2.new(0.5, -10, 0.5, -1)
-    xOverlay2.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
-    xOverlay2.BorderSizePixel = 0
-    xOverlay2.Rotation = -45
-    xOverlay2.ZIndex = 3
-    xOverlay2.Parent = hitboxViewBtn
-
-    local xOverlay2Corner = Instance.new("UICorner")
-    xOverlay2Corner.CornerRadius = UDim.new(1, 0)
-    xOverlay2Corner.Parent = xOverlay2
-
-    local hitboxStatusLabel = Instance.new("TextLabel")
-    hitboxStatusLabel.Size = UDim2.new(1, 0, 0, 16)
-    hitboxStatusLabel.Position = UDim2.new(0, 0, 0, 66)
-    hitboxStatusLabel.BackgroundTransparency = 1
-    hitboxStatusLabel.Text = "Expanda a hitbox dos jogadores"
-    hitboxStatusLabel.TextColor3 = theme.textMuted
-    hitboxStatusLabel.TextSize = 10
-    hitboxStatusLabel.Font = Enum.Font.Gotham
-    hitboxStatusLabel.Parent = hitboxSection
-
-    -- ============================================
-    -- SEÇÃO FLY
+    -- FLY
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 116)
-    flySection.Position = UDim2.new(0, 0, 0, 616)
+    flySection.Position = UDim2.new(0, 0, 0, 532)
     flySection.BackgroundTransparency = 1
     flySection.Parent = page1
 
@@ -2308,7 +2284,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     flyBtnCorner.Parent = flyToggleBtn
 
     -- ============================================
-    -- SEÇÃO AIMBOT (PÁGINA 2) — Y=0
+    -- AIMBOT (página 2) — Y=0 — emoji 🤖
     -- ============================================
     local aimbotSection = Instance.new("Frame")
     aimbotSection.Size = UDim2.new(1, 0, 0, 130)
@@ -2324,7 +2300,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotTitleContainer.BackgroundTransparency = 1
     aimbotTitleContainer.Parent = aimbotSection
 
-    createSectionIcon(aimbotTitleContainer, "🎯", theme.aimbotColor)
+    createSectionIcon(aimbotTitleContainer, "🤖", theme.aimbotColor)
 
     local aimbotTitle = Instance.new("TextLabel")
     aimbotTitle.Size = UDim2.new(1, -30, 1, 0)
@@ -2490,7 +2466,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotStatusLabel.Parent = aimbotSection
 
     -- ============================================
-    -- SEÇÃO TP CLICK (PÁGINA 2) — Y=142
+    -- TP CLICK (página 2) — Y=142
     -- ============================================
     local tpSection = Instance.new("Frame")
     tpSection.Size = UDim2.new(1, 0, 0, 110)
@@ -2553,13 +2529,169 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     tpStatusLabel.Parent = tpContent
 
     -- ============================================
+    -- HITBOX (página 2) — Y=238 — emoji 🎯
+    -- ============================================
+    local hitboxSection = Instance.new("Frame")
+    hitboxSection.Size = UDim2.new(1, 0, 0, 84)
+    hitboxSection.Position = UDim2.new(0, 0, 0, 238)
+    hitboxSection.BackgroundTransparency = 1
+    hitboxSection.Parent = page2
+
+    createAccentBar(hitboxSection, theme.hitboxColor)
+
+    local hitboxTitleContainer = Instance.new("Frame")
+    hitboxTitleContainer.Size = UDim2.new(1, -12, 0, 22)
+    hitboxTitleContainer.Position = UDim2.new(0, 12, 0, 0)
+    hitboxTitleContainer.BackgroundTransparency = 1
+    hitboxTitleContainer.Parent = hitboxSection
+
+    createSectionIcon(hitboxTitleContainer, "🎯", theme.hitboxColor)
+
+    local hitboxTitle = Instance.new("TextLabel")
+    hitboxTitle.Size = UDim2.new(1, -30, 1, 0)
+    hitboxTitle.Position = UDim2.new(0, 28, 0, 0)
+    hitboxTitle.BackgroundTransparency = 1
+    hitboxTitle.Text = "HITBOX EXPANDER"
+    hitboxTitle.TextColor3 = theme.textSecondary
+    hitboxTitle.TextSize = 12
+    hitboxTitle.Font = Enum.Font.GothamBold
+    hitboxTitle.TextXAlignment = Enum.TextXAlignment.Left
+    hitboxTitle.Parent = hitboxTitleContainer
+
+    local hitboxToggleBtn = Instance.new("TextButton")
+    hitboxToggleBtn.Size = UDim2.new(0, 90, 0, 30)
+    hitboxToggleBtn.Position = UDim2.new(0.5, -48, 0, 26)
+    hitboxToggleBtn.BackgroundColor3 = theme.danger
+    hitboxToggleBtn.BackgroundTransparency = 0.2
+    hitboxToggleBtn.Text = "OFF"
+    hitboxToggleBtn.TextColor3 = theme.danger
+    hitboxToggleBtn.TextSize = 13
+    hitboxToggleBtn.Font = Enum.Font.GothamBold
+    hitboxToggleBtn.BorderSizePixel = 2
+    hitboxToggleBtn.BorderColor3 = theme.danger
+    hitboxToggleBtn.Parent = hitboxSection
+
+    local hitboxBtnCorner = Instance.new("UICorner")
+    hitboxBtnCorner.CornerRadius = UDim.new(0, 8)
+    hitboxBtnCorner.Parent = hitboxToggleBtn
+
+    local hitboxViewBtn = Instance.new("TextButton")
+    hitboxViewBtn.Size = UDim2.new(0, 30, 0, 30)
+    hitboxViewBtn.Position = UDim2.new(0.5, 48, 0, 26)
+    hitboxViewBtn.BackgroundColor3 = theme.surface2
+    hitboxViewBtn.BackgroundTransparency = 0.3
+    hitboxViewBtn.Text = "👁"
+    hitboxViewBtn.TextColor3 = theme.textMuted
+    hitboxViewBtn.TextSize = 16
+    hitboxViewBtn.Font = Enum.Font.GothamBold
+    hitboxViewBtn.BorderSizePixel = 2
+    hitboxViewBtn.BorderColor3 = theme.danger
+    hitboxViewBtn.Parent = hitboxSection
+
+    local hitboxViewCorner = Instance.new("UICorner")
+    hitboxViewCorner.CornerRadius = UDim.new(0, 8)
+    hitboxViewCorner.Parent = hitboxViewBtn
+
+    local xOverlay1 = Instance.new("Frame")
+    xOverlay1.Size = UDim2.new(0, 20, 0, 2)
+    xOverlay1.Position = UDim2.new(0.5, -10, 0.5, -1)
+    xOverlay1.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
+    xOverlay1.BorderSizePixel = 0
+    xOverlay1.Rotation = 45
+    xOverlay1.ZIndex = 3
+    xOverlay1.Parent = hitboxViewBtn
+
+    local xOverlay1Corner = Instance.new("UICorner")
+    xOverlay1Corner.CornerRadius = UDim.new(1, 0)
+    xOverlay1Corner.Parent = xOverlay1
+
+    local xOverlay2 = Instance.new("Frame")
+    xOverlay2.Size = UDim2.new(0, 20, 0, 2)
+    xOverlay2.Position = UDim2.new(0.5, -10, 0.5, -1)
+    xOverlay2.BackgroundColor3 = Color3.fromRGB(255, 82, 82)
+    xOverlay2.BorderSizePixel = 0
+    xOverlay2.Rotation = -45
+    xOverlay2.ZIndex = 3
+    xOverlay2.Parent = hitboxViewBtn
+
+    local xOverlay2Corner = Instance.new("UICorner")
+    xOverlay2Corner.CornerRadius = UDim.new(1, 0)
+    xOverlay2Corner.Parent = xOverlay2
+
+    local hitboxStatusLabel = Instance.new("TextLabel")
+    hitboxStatusLabel.Size = UDim2.new(1, 0, 0, 16)
+    hitboxStatusLabel.Position = UDim2.new(0, 0, 0, 66)
+    hitboxStatusLabel.BackgroundTransparency = 1
+    hitboxStatusLabel.Text = "Expanda a hitbox dos jogadores"
+    hitboxStatusLabel.TextColor3 = theme.textMuted
+    hitboxStatusLabel.TextSize = 10
+    hitboxStatusLabel.Font = Enum.Font.Gotham
+    hitboxStatusLabel.Parent = hitboxSection
+
+    -- ============================================
+    -- INVISIBLE (página 2) — Y=322
+    -- ============================================
+    local invisibleSection = Instance.new("Frame")
+    invisibleSection.Size = UDim2.new(1, 0, 0, 84)
+    invisibleSection.Position = UDim2.new(0, 0, 0, 322)
+    invisibleSection.BackgroundTransparency = 1
+    invisibleSection.Parent = page2
+
+    createAccentBar(invisibleSection, theme.invisibleColor)
+
+    local invisibleTitleContainer = Instance.new("Frame")
+    invisibleTitleContainer.Size = UDim2.new(1, -12, 0, 22)
+    invisibleTitleContainer.Position = UDim2.new(0, 12, 0, 0)
+    invisibleTitleContainer.BackgroundTransparency = 1
+    invisibleTitleContainer.Parent = invisibleSection
+
+    createSectionIcon(invisibleTitleContainer, "👤", theme.invisibleColor)
+
+    local invisibleTitle = Instance.new("TextLabel")
+    invisibleTitle.Size = UDim2.new(1, -30, 1, 0)
+    invisibleTitle.Position = UDim2.new(0, 28, 0, 0)
+    invisibleTitle.BackgroundTransparency = 1
+    invisibleTitle.Text = "INVISIBLE"
+    invisibleTitle.TextColor3 = theme.textSecondary
+    invisibleTitle.TextSize = 12
+    invisibleTitle.Font = Enum.Font.GothamBold
+    invisibleTitle.TextXAlignment = Enum.TextXAlignment.Left
+    invisibleTitle.Parent = invisibleTitleContainer
+
+    local invisibleToggleBtn = Instance.new("TextButton")
+    invisibleToggleBtn.Size = UDim2.new(0, 90, 0, 30)
+    invisibleToggleBtn.Position = UDim2.new(0.5, -45, 0, 26)
+    invisibleToggleBtn.BackgroundColor3 = theme.danger
+    invisibleToggleBtn.BackgroundTransparency = 0.2
+    invisibleToggleBtn.Text = "OFF"
+    invisibleToggleBtn.TextColor3 = theme.danger
+    invisibleToggleBtn.TextSize = 13
+    invisibleToggleBtn.Font = Enum.Font.GothamBold
+    invisibleToggleBtn.BorderSizePixel = 2
+    invisibleToggleBtn.BorderColor3 = theme.danger
+    invisibleToggleBtn.Parent = invisibleSection
+
+    local invisibleBtnCorner = Instance.new("UICorner")
+    invisibleBtnCorner.CornerRadius = UDim.new(0, 8)
+    invisibleBtnCorner.Parent = invisibleToggleBtn
+
+    local invisibleStatusLabel = Instance.new("TextLabel")
+    invisibleStatusLabel.Size = UDim2.new(1, 0, 0, 16)
+    invisibleStatusLabel.Position = UDim2.new(0, 0, 0, 66)
+    invisibleStatusLabel.BackgroundTransparency = 1
+    invisibleStatusLabel.Text = "Deixe seu personagem invisível"
+    invisibleStatusLabel.TextColor3 = theme.textMuted
+    invisibleStatusLabel.TextSize = 10
+    invisibleStatusLabel.Font = Enum.Font.Gotham
+    invisibleStatusLabel.Parent = invisibleSection
+
+    -- ============================================
     -- SLIDERS
     -- ============================================
 
-    -- Velocidade
     local speedIsActive = false
     local speedMin, speedMax = 5, 500
-    local currentSpeedValue = speedModule.currentSpeed or 16
+    local currentSpeedValue = speedModule.currentSpeed or 25
     local speedDragging = false
     local speedDragConn, speedReleaseConn = nil, nil
 
@@ -2618,7 +2750,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- Fly
     local flyMin, flyMax = 1, 10
     local currentFlyValue = flyModule.speed or 1
     local flyDragging = false
@@ -2679,7 +2810,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- Aimbot
     local aimbotMin, aimbotMax = 1, 10
     local currentAimbotValue = math.clamp(math.floor((aimbotModule.fov or 120) / 60 + 0.5), 1, 10)
     local aimbotDragging = false
@@ -2730,7 +2860,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
-    -- FOV Show button
     local isShowingFOV = false
     fovShowBtn.MouseButton1Click:Connect(function()
         playClickSound()
@@ -2832,7 +2961,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     autoPresserModule.onHoldChanged = function() updateAutoStatus() end
 
-    -- ✅ SOM ADICIONADO AQUI NO AUTO PRESSER
     autoToggleBtn.MouseButton1Click:Connect(function()
         playClickSound()
         autoPresserModule:toggle()
@@ -2966,6 +3094,18 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
+    invisibleToggleBtn.MouseButton1Click:Connect(function()
+        local isOn = invisibleModule:toggle()
+        toggleVisual(invisibleToggleBtn, isOn)
+        if isOn then
+            invisibleStatusLabel.Text = "Personagem Invisível"
+            invisibleStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+        else
+            invisibleStatusLabel.Text = "Deixe seu personagem invisível"
+            invisibleStatusLabel.TextColor3 = theme.textMuted
+        end
+    end)
+
     flyToggleBtn.MouseButton1Click:Connect(function()
         if flyModule.isEnabled then flyModule:disable() else flyModule:enable() end
         toggleVisual(flyToggleBtn, flyModule.isEnabled)
@@ -3008,7 +3148,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             minBtn.Text = "+"
         else
             content.Visible = true
-            TweenService:Create(mainFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 220, 0, 810)}):Play()
+            TweenService:Create(mainFrame, TweenInfo.new(0.25), {Size = UDim2.new(0, 220, 0, 720)}):Play()
             minBtn.Text = "−"
         end
     end)
@@ -3024,6 +3164,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         pcall(function() noclipModule:disable() end)
         pcall(function() autoPresserModule:disable() end)
         pcall(function() hitboxModule:disable() end)
+        pcall(function() invisibleModule:disable() end)
         pcall(function() flyModule:disable() end)
         pcall(function() aimbotModule:disable() end)
         pcall(function() tpClickModule:disable() end)
@@ -3031,18 +3172,15 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         print("❌ Painel fechado — todos os módulos desligados.")
     end)
 
-    -- ============================================
-    -- EFEITO DE ENTRADA
-    -- ============================================
     mainFrame.BackgroundTransparency = 1
-    mainFrame.Size = UDim2.new(0, 200, 0, 750)
-    mainFrame.Position = UDim2.new(0.5, -100, 0.5, -375)
+    mainFrame.Size = UDim2.new(0, 200, 0, 660)
+    mainFrame.Position = UDim2.new(0.5, -100, 0.5, -330)
 
     task.spawn(function()
         task.wait(0.1)
         TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 220, 0, 810),
-            Position = UDim2.new(0.5, -110, 0.5, -405),
+            Size = UDim2.new(0, 220, 0, 720),
+            Position = UDim2.new(0.5, -110, 0.5, -360),
             BackgroundTransparency = 0.08,
         }):Play()
     end)
@@ -3061,6 +3199,7 @@ local espModule = ESPModule.new(config)
 local noclipModule = NoclipModule.new(config)
 local autoPresserModule = AutoPresserModule.new(config)
 local hitboxModule = HitboxModule.new(config)
+local invisibleModule = InvisibleModule.new(config)
 local flyModule = FlyModule.new(config)
 local aimbotModule = AimbotModule.new(config)
 local tpClickModule = TPClickModule.new(config)
@@ -3068,17 +3207,14 @@ local tpClickModule = TPClickModule.new(config)
 speedModule:initialize()
 
 local ok, err = pcall(function()
-    createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule, tpClickModule)
+    createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, invisibleModule, flyModule, aimbotModule, tpClickModule)
 end)
 
 if ok then
-    print("✅ Basic Settings Control v1.9.9 carregado!")
-    print("🔊 Som em todos os botões (inclusive Auto Presser)")
-    print("📐 Painel 220x810 com botões proporcionais")
-    print("🛡️ Anti-AFK ativo (sempre ligado)")
-    print("👁️ X vermelho no botão de olho do Hitbox")
-    print("🌀 TP CLICK usando mouse.Hit (nativo, preciso)")
-    print("🎯 AIMBOT funcional com slider de FOV")
+    print("✅ Basic Settings Control v2.0.9 carregado!")
+    print("🌀 TP Click corrigido (Teleporte não trava mais)")
+    print("👤 Módulo INVISIBLE ativo")
+    print("🛡️ Anti-AFK ativo")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
 end
