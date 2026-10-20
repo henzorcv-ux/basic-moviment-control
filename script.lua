@@ -1,10 +1,10 @@
 --[[
-    Basic Settings Control v2.0.9
+    Basic Settings Control v2.1.0
     Velocidade | Pulo | ESP | Noclip | Auto Presser | Fly (pág.1) | Aim | TP Click | Hitbox | Invisible (pág.2) | Anti-AFK
 
-    v2.0.9:
-    - Correção no TP Click: Altura dinâmica (evita afundar e travar em personagens pequenos/grandes)
-    - TP Click zera inércia e força estado Running do Humanoid
+    v2.1.0:
+    - Correção do botão Invisible (estado visual travado)
+    - Invisibilidade agressiva: Network Ownership forçado e loop RenderStepped (replica para os outros)
 --]]
 
 -- ============================================
@@ -829,7 +829,7 @@ function HitboxModule:setViewing(state)
 end
 
 -- ============================================
--- MÓDULO INVISIBLE
+-- MÓDULO INVISIBLE (AGGRESSIVE REPLICATION)
 -- ============================================
 
 local InvisibleModule = {}
@@ -839,52 +839,53 @@ function InvisibleModule.new(config)
     local self = setmetatable({}, InvisibleModule)
     self.config = config
     self.isEnabled = false
-    self.originalTransparencies = {}
-    self.characterAddedConn = nil
+    self.originalData = {}
+    self.loopConn = nil
     return self
-end
-
-function InvisibleModule:applyInvisibility()
-    local char = player.Character
-    if not char then return end
-    
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            if not self.originalTransparencies[part] then
-                self.originalTransparencies[part] = part.Transparency
-            end
-            part.Transparency = 1
-        elseif part:IsA("Decal") or part:IsA("Texture") or part:IsA("BillboardGui") then
-            if not self.originalTransparencies[part] then
-                self.originalTransparencies[part] = part.Transparency
-            end
-            part.Transparency = 1
-        end
-    end
-end
-
-function InvisibleModule:restoreVisibility()
-    for part, trans in pairs(self.originalTransparencies) do
-        pcall(function()
-            if part and part.Parent then
-                part.Transparency = trans
-            end
-        end)
-    end
-    self.originalTransparencies = {}
 end
 
 function InvisibleModule:enable()
     if self.isEnabled then return end
     self.isEnabled = true
     self.config:set("features.invisible", true)
-    self:applyInvisibility()
     
-    if self.characterAddedConn then self.characterAddedConn:Disconnect() end
-    self.characterAddedConn = player.CharacterAdded:Connect(function()
-        task.wait(1)
-        if self.isEnabled then self:applyInvisibility() end
+    local char = player.Character
+    if char then
+        self.originalData = {}
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                self.originalData[part] = {
+                    Transparency = part.Transparency,
+                    CanCollide = part.CanCollide,
+                    CastShadow = part.CastShadow
+                }
+                -- Força a propriedade de rede para o cliente (permite replicar a transparência)
+                pcall(function() part:SetNetworkOwner(player) end)
+            elseif part:IsA("Decal") or part:IsA("Texture") then
+                self.originalData[part] = {
+                    Transparency = part.Transparency
+                }
+            end
+        end
+    end
+
+    -- Loop agressivo para garantir que o servidor não reverta
+    if self.loopConn then self.loopConn:Disconnect() end
+    self.loopConn = RunService.RenderStepped:Connect(function()
+        if not self.isEnabled then return end
+        local c = player.Character
+        if not c then return end
+        
+        for _, part in ipairs(c:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if part.Transparency < 1 then part.Transparency = 1 end
+                if part.CastShadow then part.CastShadow = false end
+            elseif part:IsA("Decal") or part:IsA("Texture") then
+                if part.Transparency < 1 then part.Transparency = 1 end
+            end
+        end
     end)
+    
     print("👤 Invisibilidade ATIVADA!")
 end
 
@@ -892,8 +893,20 @@ function InvisibleModule:disable()
     if not self.isEnabled then return end
     self.isEnabled = false
     self.config:set("features.invisible", false)
-    if self.characterAddedConn then self.characterAddedConn:Disconnect() self.characterAddedConn = nil end
-    self:restoreVisibility()
+    
+    if self.loopConn then
+        self.loopConn:Disconnect()
+        self.loopConn = nil
+    end
+    
+    for part, data in pairs(self.originalData) do
+        if part and part.Parent then
+            part.Transparency = data.Transparency
+            if data.CanCollide ~= nil then part.CanCollide = data.CanCollide end
+            if data.CastShadow ~= nil then part.CastShadow = data.CastShadow end
+        end
+    end
+    self.originalData = {}
     print("👤 Invisibilidade DESATIVADA!")
 end
 
@@ -1185,7 +1198,6 @@ function TPClickModule:_getGroundOffset()
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum then return 3 end
     
-    -- Distância do centro do HRP até o chão baseada no tamanho real do personagem
     return hum.HipHeight + (hrp.Size.Y / 2)
 end
 
@@ -1219,13 +1231,12 @@ function TPClickModule:_getTargetPosition()
         if downResult then
             finalPos = downResult.Position
         else
-            finalPos = limitedPos - Vector3.new(0, 3, 0) -- fallback
+            finalPos = limitedPos - Vector3.new(0, 3, 0)
         end
     else
         finalPos = hitPos
     end
     
-    -- Soma o offset dinâmico baseado no HipHeight do jogador (evita afundar no chão)
     local groundOffset = self:_getGroundOffset()
     return finalPos + Vector3.new(0, groundOffset + 0.5, 0)
 end
@@ -1239,11 +1250,9 @@ function TPClickModule:_teleportTo(position)
 
     pcall(function()
         hrp.CFrame = CFrame.new(position)
-        -- Reseta inércia para não herdar velocidade
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
         
-        -- Força estado Running para destravar o movimento
         if hum then
             if hum:GetState() ~= Enum.HumanoidStateType.Jumping and hum:GetState() ~= Enum.HumanoidStateType.Freefall then
                 hum:ChangeState(Enum.HumanoidStateType.Running)
@@ -3094,15 +3103,22 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
+    -- CORREÇÃO DO BOTÃO INVISIBLE: Estado Local Explicito
+    local isInvisibleActive = false
     invisibleToggleBtn.MouseButton1Click:Connect(function()
-        local isOn = invisibleModule:toggle()
-        toggleVisual(invisibleToggleBtn, isOn)
-        if isOn then
+        isInvisibleActive = not isInvisibleActive
+        
+        -- Atualiza a UI na hora, independente do módulo
+        if isInvisibleActive then
+            toggleVisual(invisibleToggleBtn, true)
             invisibleStatusLabel.Text = "Personagem Invisível"
-            invisibleStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+            invisibleStatusLabel.TextColor3 = theme.success
+            invisibleModule:enable()
         else
+            toggleVisual(invisibleToggleBtn, false)
             invisibleStatusLabel.Text = "Deixe seu personagem invisível"
             invisibleStatusLabel.TextColor3 = theme.textMuted
+            invisibleModule:disable()
         end
     end)
 
@@ -3211,9 +3227,9 @@ local ok, err = pcall(function()
 end)
 
 if ok then
-    print("✅ Basic Settings Control v2.0.9 carregado!")
+    print("✅ Basic Settings Control v2.1.0 carregado!")
+    print("👤 Invisibilidade agressiva (Network Ownership + Loop)")
     print("🌀 TP Click corrigido (Teleporte não trava mais)")
-    print("👤 Módulo INVISIBLE ativo")
     print("🛡️ Anti-AFK ativo")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
