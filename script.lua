@@ -2091,7 +2091,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- Radio Buttons (Lado Direito, sem fundo branco)
     local radioContainer = Instance.new("Frame")
     radioContainer.Size = UDim2.new(0, 60, 0, 44)
-    radioContainer.Position = UDim2.new(1, -60, 0, 0)
+    radioContainer.Position = UDim2.new(1, -40, 0.15, 0)
     radioContainer.BackgroundTransparency = 1
     radioContainer.Parent = autoSection
 
