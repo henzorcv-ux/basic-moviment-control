@@ -1,9 +1,9 @@
 --[[
-    Basic Settings Control v1.1.3
+    Basic Settings Control v1.0.0
     Velocidade | Pulo | ESP | Noclip | Auto Presser/Clicker | Fly (pág.1) | Aim | TP Click | Hitbox (pág.2) | Anti-AFK
 
-    v1.1.3:
-    - Ajuste visual: posição do radioContainer (bolinhas de seleção) alterada para UDim2.new(1, -40, 0.15, 0)
+    v1.0.0:
+    - Botões da sessão Auto reduzidos (~15-20%).
 --]]
 
 -- ============================================
@@ -670,8 +670,6 @@ function AutoPresserModule:_disconnectKeyToggle()
 end
 
 function AutoPresserModule:_holdKey()
-    pcall(function() VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game) end)
-    task.wait(0.015)
     pcall(function() VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game) end)
     self.isKeyHeld = true
 end
@@ -687,18 +685,10 @@ function AutoPresserModule:_startReinforce()
     self.reinforceThread = task.spawn(function()
         while self.isHolding do
             task.wait(0.05)
-            if not self.isHolding then break end
-            
-            pcall(function() VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game) end)
-            task.wait(0.015)
-            
-            if not self.isHolding then
-                self.isKeyHeld = false
-                break
+            if self.isHolding then
+                pcall(function() VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game) end)
+                self.isKeyHeld = true
             end
-            
-            pcall(function() VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game) end)
-            self.isKeyHeld = true
         end
         self.reinforceThread = nil
     end)
@@ -2070,7 +2060,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- AUTO PRESSER / CLICKER (PÁGINA 1)
     -- ============================================
     local autoSection = Instance.new("Frame")
-    autoSection.Size = UDim2.new(1, 0, 0, 136)
+    autoSection.Size = UDim2.new(1, 0, 0, 128)
     autoSection.Position = UDim2.new(0, 0, 0, 376)
     autoSection.BackgroundTransparency = 1
     autoSection.Parent = page1
@@ -2096,62 +2086,58 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoTitle.TextXAlignment = Enum.TextXAlignment.Left
     autoTitle.Parent = autoTitleContainer
 
-    -- ALTERAÇÃO APLICADA AQUI: Posição do radioContainer
     local radioContainer = Instance.new("Frame")
-    radioContainer.Size = UDim2.new(0, 60, 0, 44)
-    radioContainer.Position = UDim2.new(1, -40, 0.15, 0)
+    radioContainer.Size = UDim2.new(0, 60, 0, 64)
+    radioContainer.Position = UDim2.new(1, -62, 0, 12)
     radioContainer.BackgroundTransparency = 1
     radioContainer.Parent = autoSection
 
-    local function createRadio(yPos, emoji, color)
+    local function createRadio(yPos, imageId, color)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 22)
-        btn.Position = UDim2.new(0, 0, 0, yPos)
+        btn.Size = UDim2.new(1, 0, 0, 32)
+        btn.Position = UDim2.new(0, 0, 0.1, yPos)
         btn.BackgroundTransparency = 1
         btn.Text = ""
         btn.Parent = radioContainer
         
         local circle = Instance.new("Frame")
-        circle.Size = UDim2.new(0, 12, 0, 12)
-        circle.Position = UDim2.new(0, 0, 0.5, -6)
+        circle.Size = UDim2.new(0, 14, 0, 14)
+        circle.Position = UDim2.new(0, 2, 0.5, -7)
         circle.BackgroundColor3 = theme.surface3
         circle.Parent = btn
         Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
         
         local inner = Instance.new("Frame")
-        inner.Size = UDim2.new(0, 6, 0, 6)
-        inner.Position = UDim2.new(0.5, -3, 0.5, -3)
+        inner.Size = UDim2.new(0, 7, 0, 7)
+        inner.Position = UDim2.new(0.5, -3.5, 0.5, -3.5)
         inner.BackgroundColor3 = color
         inner.BackgroundTransparency = 1
         inner.Parent = circle
         Instance.new("UICorner", inner).CornerRadius = UDim.new(1, 0)
         
-        local emojiLabel = Instance.new("TextLabel")
-        emojiLabel.Size = UDim2.new(0, 20, 1, 0)
-        emojiLabel.Position = UDim2.new(0, 16, 0, 0)
-        emojiLabel.BackgroundTransparency = 1
-        emojiLabel.Text = emoji
-        emojiLabel.TextColor3 = color
-        emojiLabel.TextSize = 14
-        emojiLabel.Font = Enum.Font.GothamBold
-        emojiLabel.TextXAlignment = Enum.TextXAlignment.Left
-        emojiLabel.Parent = btn
+        local iconImage = Instance.new("ImageLabel")
+        iconImage.Size = UDim2.new(0, 30, 0, 30)
+        iconImage.Position = UDim2.new(0, 20, 0.5, -13)
+        iconImage.BackgroundTransparency = 1
+        iconImage.ScaleType = Enum.ScaleType.Fit
+        iconImage.Image = "rbxthumb://type=Asset&id=" .. imageId .. "&w=150&h=150"
+        iconImage.Parent = btn
         
         return btn, inner
     end
 
-    local radioPresserBtn, radioPresserInner = createRadio(0, "🖐️", theme.autoPresserColor)
-    local radioClickerBtn, radioClickerInner = createRadio(22, "👆", theme.autoClickerColor)
+    local radioPresserBtn, radioPresserInner = createRadio(0,  "79075915453306",  theme.autoPresserColor)
+    local radioClickerBtn, radioClickerInner = createRadio(32, "117021966902444", theme.autoClickerColor)
 
     local autoToggleBtn = Instance.new("TextButton")
-    autoToggleBtn.Size = UDim2.new(0, 90, 0, 30)
-    autoToggleBtn.Position = UDim2.new(0.5, -45, 0, 26)
+    autoToggleBtn.Size = UDim2.new(0, 95, 0, 28)
+    autoToggleBtn.Position = UDim2.new(0.4, -55, 0, 35)
     autoToggleBtn.BackgroundColor3 = theme.danger
     autoToggleBtn.BackgroundTransparency = 0.2
     autoToggleBtn.Text = "OFF"
     autoToggleBtn.TextColor3 = theme.danger
     autoToggleBtn.Font = Enum.Font.GothamBold
-    autoToggleBtn.TextSize = 13
+    autoToggleBtn.TextSize = 12
     autoToggleBtn.BorderSizePixel = 2
     autoToggleBtn.BorderColor3 = theme.danger
     autoToggleBtn.Parent = autoSection
@@ -2159,7 +2145,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local autoStatusLabel = Instance.new("TextLabel")
     autoStatusLabel.Size = UDim2.new(1, 0, 0, 14)
-    autoStatusLabel.Position = UDim2.new(0, 0, 0, 58)
+    autoStatusLabel.Position = UDim2.new(0, 0, 0, 80.)
     autoStatusLabel.BackgroundTransparency = 1
     autoStatusLabel.Text = "Ativa/Desativa com [R] • Segura [E]"
     autoStatusLabel.TextColor3 = theme.textMuted
@@ -2168,8 +2154,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoStatusLabel.Parent = autoSection
 
     local presserConfig = Instance.new("Frame")
-    presserConfig.Size = UDim2.new(1, -20, 0, 30)
-    presserConfig.Position = UDim2.new(0, 10, 0, 80)
+    presserConfig.Size = UDim2.new(1, -20, 0, 26)
+    presserConfig.Position = UDim2.new(0, 10, 0, 100)
     presserConfig.BackgroundTransparency = 1
     presserConfig.Visible = true
     presserConfig.Parent = autoSection
@@ -2179,7 +2165,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     toggleKeyBtn.BackgroundColor3 = theme.surface3
     toggleKeyBtn.Text = "R"
     toggleKeyBtn.TextColor3 = theme.autoPresserColor
-    toggleKeyBtn.TextSize = 13
+    toggleKeyBtn.TextSize = 16
     toggleKeyBtn.Font = Enum.Font.GothamBold
     toggleKeyBtn.Parent = presserConfig
     Instance.new("UICorner", toggleKeyBtn).CornerRadius = UDim.new(0, 6)
@@ -2190,14 +2176,14 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     pressKeyBtn.BackgroundColor3 = theme.surface3
     pressKeyBtn.Text = "E"
     pressKeyBtn.TextColor3 = theme.autoPresserColor
-    pressKeyBtn.TextSize = 13
+    pressKeyBtn.TextSize = 16
     pressKeyBtn.Font = Enum.Font.GothamBold
     pressKeyBtn.Parent = presserConfig
     Instance.new("UICorner", pressKeyBtn).CornerRadius = UDim.new(0, 6)
 
     local clickerConfig = Instance.new("Frame")
-    clickerConfig.Size = UDim2.new(1, -20, 0, 30)
-    clickerConfig.Position = UDim2.new(0, 10, 0, 80)
+    clickerConfig.Size = UDim2.new(1, -20, 0, 26)
+    clickerConfig.Position = UDim2.new(0, 10, 0, 100)
     clickerConfig.BackgroundTransparency = 1
     clickerConfig.Visible = false
     clickerConfig.Parent = autoSection
@@ -2207,12 +2193,37 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     clickerKeyBtn.BackgroundColor3 = theme.surface3
     clickerKeyBtn.Text = "F"
     clickerKeyBtn.TextColor3 = theme.autoClickerColor
-    clickerKeyBtn.TextSize = 13
+    clickerKeyBtn.TextSize = 16
     clickerKeyBtn.Font = Enum.Font.GothamBold
     clickerKeyBtn.Parent = clickerConfig
     Instance.new("UICorner", clickerKeyBtn).CornerRadius = UDim.new(0, 6)
 
     local currentMode = "presser"
+
+    local function applyToggleButtonVisual(btn, isOn)
+        if isOn then
+            btn.Text = "ON"
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.BackgroundColor3 = theme.success
+            btn.BackgroundTransparency = 0.15
+            btn.BorderColor3 = theme.success
+            local g = btn:FindFirstChildOfClass("UIGradient")
+            if not g then g = Instance.new("UIGradient") g.Parent = btn end
+            g.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
+            })
+            g.Rotation = 90
+        else
+            btn.Text = "OFF"
+            btn.TextColor3 = theme.danger
+            btn.BackgroundColor3 = theme.danger
+            btn.BackgroundTransparency = 0.2
+            btn.BorderColor3 = theme.danger
+            local g = btn:FindFirstChildOfClass("UIGradient")
+            if g then g:Destroy() end
+        end
+    end
 
     local function updateSessionUI()
         if currentMode == "presser" then
@@ -2234,19 +2245,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             isEnabled = autoClickerModule.isEnabled
         end
         
-        if isEnabled then
-            autoToggleBtn.Text = "ON"
-            autoToggleBtn.BackgroundColor3 = theme.success
-            autoToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            autoToggleBtn.BorderColor3 = theme.success
-            autoToggleBtn.BackgroundTransparency = 0.15
-        else
-            autoToggleBtn.Text = "OFF"
-            autoToggleBtn.BackgroundColor3 = theme.danger
-            autoToggleBtn.TextColor3 = theme.danger
-            autoToggleBtn.BorderColor3 = theme.danger
-            autoToggleBtn.BackgroundTransparency = 0.2
-        end
+        applyToggleButtonVisual(autoToggleBtn, isEnabled)
         
         if currentMode == "presser" then
             if autoPresserModule.isEnabled then
@@ -2290,6 +2289,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     end)
 
     autoToggleBtn.MouseButton1Click:Connect(function()
+        playClickSound()
         if currentMode == "presser" then
             if autoPresserModule.isEnabled then
                 autoPresserModule:disable()
@@ -2364,7 +2364,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 116)
-    flySection.Position = UDim2.new(0, 0, 0, 520)
+    flySection.Position = UDim2.new(0, 0, 0, 512)
     flySection.BackgroundTransparency = 1
     flySection.Parent = page1
 
@@ -2735,7 +2735,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- ============================================
     local hitboxSection = Instance.new("Frame")
     hitboxSection.Size = UDim2.new(1, 0, 0, 84)
-    hitboxSection.Position = UDim2.new(0, 0, 0, 240)
+    hitboxSection.Position = UDim2.new(0, 0, 0, 235)
     hitboxSection.BackgroundTransparency = 1
     hitboxSection.Parent = page2
 
@@ -3069,28 +3069,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- ============================================
     local function toggleVisual(btn, isOn)
         playClickSound()
-        if isOn then
-            btn.Text = "ON"
-            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            btn.BackgroundColor3 = theme.success
-            btn.BackgroundTransparency = 0.15
-            btn.BorderColor3 = theme.success
-            local g = btn:FindFirstChildOfClass("UIGradient")
-            if not g then g = Instance.new("UIGradient") g.Parent = btn end
-            g.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
-            })
-            g.Rotation = 90
-        else
-            btn.Text = "OFF"
-            btn.TextColor3 = theme.danger
-            btn.BackgroundColor3 = theme.danger
-            btn.BackgroundTransparency = 0.2
-            btn.BorderColor3 = theme.danger
-            local g = btn:FindFirstChildOfClass("UIGradient")
-            if g then g:Destroy() end
-        end
+        applyToggleButtonVisual(btn, isOn)
     end
 
     speedToggleBtn.MouseButton1Click:Connect(function()
@@ -3244,7 +3223,7 @@ local ok, err = pcall(function()
 end)
 
 if ok then
-    print("✅ Basic Settings Control v1.1.3 carregado!")
+    print("✅ Basic Settings Control v1.0.0 carregado!")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
 end
