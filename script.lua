@@ -1,12 +1,10 @@
 --[[
-    Basic Settings Control v1.0.0
-    Velocidade | Pulo | ESP | Noclip | Auto Presser | Fly (pág.1) | Aim | TP Click | Hitbox (pág.2) | Anti-AFK
+    Basic Settings Control v1.1.1
+    Velocidade | Pulo | ESP | Noclip | Auto Presser/Clicker | Fly (pág.1) | Aim | TP Click | Hitbox (pág.2) | Anti-AFK
 
-    v1.0.0:
-    - Lançamento oficial da versão estável
-    - Pulo Infinito atravessa tetos com Noclip
-    - Hitbox otimizado
-    - TP Click sem travar
+    v1.1.1:
+    - Correção de estado: Auto Presser e Auto Clicker mantêm-se ativados ao alternar entre as bolinhas.
+    - O botão central e o texto de status refletem o estado real da ferramenta selecionada.
 --]]
 
 -- ============================================
@@ -84,7 +82,7 @@ function ConfigManager.new()
         speed = { value = 25, min = 5, max = 500 },
         flySpeed = { value = 1, min = 1, max = 10 },
         aimbot = { fov = 120, targetPart = "Head", wallCheck = true },
-        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false, aimbot = false, tpClick = false },
+        features = { speedControl = false, infiniteJump = false, noclip = false, fly = false, esp = false, hitbox = false, autoPresser = false, autoClicker = false, aimbot = false, tpClick = false },
         window = { minimized = false, currentPage = 1 }
     }
     return self
@@ -129,7 +127,11 @@ function SpeedModule.new(config)
     return self
 end
 
-function SpeedModule:initialize() self:setupCharacter() end
+function SpeedModule:initialize()
+    task.spawn(function()
+        self:setupCharacter()
+    end)
+end
 
 function SpeedModule:setupCharacter()
     self.character = player.Character or player.CharacterAdded:Wait()
@@ -758,6 +760,72 @@ function AutoPresserModule:toggle()
 end
 
 -- ============================================
+-- MÓDULO AUTO CLICKER
+-- ============================================
+
+local AutoClickerModule = {}
+AutoClickerModule.__index = AutoClickerModule
+
+function AutoClickerModule.new(config)
+    local self = setmetatable({}, AutoClickerModule)
+    self.config = config
+    self.isEnabled = false
+    self.isClicking = false
+    self.cps = 500
+    self.activationKey = Enum.KeyCode.F
+    self.connection = nil
+    self.keyConnection = nil
+    self.onStateChanged = nil
+    return self
+end
+
+function AutoClickerModule:enable()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    self.config:set("features.autoClicker", true)
+    
+    -- Toggle Logic: Press key to start, press again to stop
+    if self.keyConnection then self.keyConnection:Disconnect() end
+    self.keyConnection = UIS.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == self.activationKey and self.isEnabled then
+            self.isClicking = not self.isClicking
+            if self.onStateChanged then self.onStateChanged(self.isClicking) end
+        end
+    end)
+
+    if self.connection then self.connection:Disconnect() end
+    self.connection = RunService.Heartbeat:Connect(function()
+        if not self.isEnabled or not self.isClicking then return end
+        local mouseLoc = UIS:GetMouseLocation()
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(mouseLoc.X, mouseLoc.Y, 0, true, game, 1)
+            VirtualInputManager:SendMouseButtonEvent(mouseLoc.X, mouseLoc.Y, 0, false, game, 1)
+        end)
+    end)
+end
+
+function AutoClickerModule:disable()
+    if not self.isEnabled then return end
+    self.isEnabled = false
+    self.isClicking = false
+    self.config:set("features.autoClicker", false)
+    if self.connection then
+        self.connection:Disconnect()
+        self.connection = nil
+    end
+    if self.keyConnection then
+        self.keyConnection:Disconnect()
+        self.keyConnection = nil
+    end
+end
+
+function AutoClickerModule:toggle()
+    if self.isEnabled then self:disable() else self:enable() end
+    return self.isEnabled
+end
+
+-- ============================================
 -- MÓDULO HITBOX EXPANDER
 -- ============================================
 
@@ -1266,7 +1334,7 @@ end
 -- UI
 -- ============================================
 
-local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule, tpClickModule)
+local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, autoClickerModule, hitboxModule, flyModule, aimbotModule, tpClickModule)
     local gui = Instance.new("ScreenGui")
     gui.Name = "BasicSettingsControlGUI"
     gui.Parent = CoreGui
@@ -1291,6 +1359,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         flyColor = Color3.fromRGB(0, 230, 255),
         espColor = Color3.fromRGB(200, 130, 255),
         autoPresserColor = Color3.fromRGB(255, 150, 60),
+        autoClickerColor = Color3.fromRGB(100, 255, 150),
         aimbotColor = Color3.fromRGB(120, 255, 160),
         tpColor = Color3.fromRGB(80, 200, 255),
         gradient1 = Color3.fromRGB(100, 180, 255),
@@ -1358,7 +1427,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 220, 0, 720)
-    mainFrame.Position = UDim2.new(0.5, -110, 0.5, -360)
+    mainFrame.Position = UDim2.new(0.5, -110, 0, 40) -- Fixado no topo para sempre ser visível
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 0
@@ -1822,8 +1891,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- PULO
     -- ============================================
     local jumpSection = Instance.new("Frame")
-    jumpSection.Size = UDim2.new(1, 0, 0, 80)
-    jumpSection.Position = UDim2.new(0, 0, 0, 144)
+    jumpSection.Size = UDim2.new(1, 0, 0, 76)
+    jumpSection.Position = UDim2.new(0, 0, 0, 136)
     jumpSection.BackgroundTransparency = 1
     jumpSection.Parent = page1
 
@@ -1867,7 +1936,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local jumpStatusLabel = Instance.new("TextLabel")
     jumpStatusLabel.Size = UDim2.new(1, 0, 0, 16)
-    jumpStatusLabel.Position = UDim2.new(0, 0, 0, 62)
+    jumpStatusLabel.Position = UDim2.new(0, 0, 0, 58)
     jumpStatusLabel.BackgroundTransparency = 1
     jumpStatusLabel.Text = "Espaço para pular"
     jumpStatusLabel.TextColor3 = theme.textMuted
@@ -1879,8 +1948,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- ESP
     -- ============================================
     local espSection = Instance.new("Frame")
-    espSection.Size = UDim2.new(1, 0, 0, 84)
-    espSection.Position = UDim2.new(0, 0, 0, 232)
+    espSection.Size = UDim2.new(1, 0, 0, 76)
+    espSection.Position = UDim2.new(0, 0, 0, 216)
     espSection.BackgroundTransparency = 1
     espSection.Parent = page1
 
@@ -1924,7 +1993,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local espStatusLabel = Instance.new("TextLabel")
     espStatusLabel.Size = UDim2.new(1, 0, 0, 16)
-    espStatusLabel.Position = UDim2.new(0, 0, 0, 66)
+    espStatusLabel.Position = UDim2.new(0, 0, 0, 58)
     espStatusLabel.BackgroundTransparency = 1
     espStatusLabel.Text = "Nome • Distância • Chams"
     espStatusLabel.TextColor3 = theme.textMuted
@@ -1936,8 +2005,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- NOCLIP
     -- ============================================
     local noclipSection = Instance.new("Frame")
-    noclipSection.Size = UDim2.new(1, 0, 0, 84)
-    noclipSection.Position = UDim2.new(0, 0, 0, 320)
+    noclipSection.Size = UDim2.new(1, 0, 0, 76)
+    noclipSection.Position = UDim2.new(0, 0, 0, 296)
     noclipSection.BackgroundTransparency = 1
     noclipSection.Parent = page1
 
@@ -1981,7 +2050,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local noclipStatusLabel = Instance.new("TextLabel")
     noclipStatusLabel.Size = UDim2.new(1, 0, 0, 16)
-    noclipStatusLabel.Position = UDim2.new(0, 0, 0, 66)
+    noclipStatusLabel.Position = UDim2.new(0, 0, 0, 58)
     noclipStatusLabel.BackgroundTransparency = 1
     noclipStatusLabel.Text = "Atravesse paredes"
     noclipStatusLabel.TextColor3 = theme.textMuted
@@ -1990,11 +2059,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     noclipStatusLabel.Parent = noclipSection
 
     -- ============================================
-    -- AUTO PRESSER
+    -- AUTO PRESSER / CLICKER (PÁGINA 1)
     -- ============================================
     local autoSection = Instance.new("Frame")
-    autoSection.Size = UDim2.new(1, 0, 0, 128)
-    autoSection.Position = UDim2.new(0, 0, 0, 404)
+    autoSection.Size = UDim2.new(1, 0, 0, 136)
+    autoSection.Position = UDim2.new(0, 0, 0, 376)
     autoSection.BackgroundTransparency = 1
     autoSection.Parent = page1
 
@@ -2006,19 +2075,67 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoTitleContainer.BackgroundTransparency = 1
     autoTitleContainer.Parent = autoSection
 
-    createSectionIcon(autoTitleContainer, "🖱", theme.autoPresserColor)
+    createSectionIcon(autoTitleContainer, "🖱️", theme.autoPresserColor)
 
     local autoTitle = Instance.new("TextLabel")
-    autoTitle.Size = UDim2.new(1, -30, 1, 0)
+    autoTitle.Size = UDim2.new(1, -70, 1, 0)
     autoTitle.Position = UDim2.new(0, 28, 0, 0)
     autoTitle.BackgroundTransparency = 1
-    autoTitle.Text = "AUTO PRESSER"
+    autoTitle.Text = "AUTOPRESSER / CLICKER"
     autoTitle.TextColor3 = theme.textSecondary
     autoTitle.TextSize = 12
     autoTitle.Font = Enum.Font.GothamBold
     autoTitle.TextXAlignment = Enum.TextXAlignment.Left
     autoTitle.Parent = autoTitleContainer
 
+    -- Radio Buttons (Lado Direito, sem fundo branco)
+    local radioContainer = Instance.new("Frame")
+    radioContainer.Size = UDim2.new(0, 60, 0, 44)
+    radioContainer.Position = UDim2.new(1, -60, 0, 0)
+    radioContainer.BackgroundTransparency = 1
+    radioContainer.Parent = autoSection
+
+    local function createRadio(yPos, emoji, color)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, 0, 0, 22)
+        btn.Position = UDim2.new(0, 0, 0, yPos)
+        btn.BackgroundTransparency = 1
+        btn.Text = ""
+        btn.Parent = radioContainer
+        
+        local circle = Instance.new("Frame")
+        circle.Size = UDim2.new(0, 12, 0, 12)
+        circle.Position = UDim2.new(0, 0, 0.5, -6)
+        circle.BackgroundColor3 = theme.surface3
+        circle.Parent = btn
+        Instance.new("UICorner", circle).CornerRadius = UDim.new(1, 0)
+        
+        local inner = Instance.new("Frame")
+        inner.Size = UDim2.new(0, 6, 0, 6)
+        inner.Position = UDim2.new(0.5, -3, 0.5, -3)
+        inner.BackgroundColor3 = color
+        inner.BackgroundTransparency = 1
+        inner.Parent = circle
+        Instance.new("UICorner", inner).CornerRadius = UDim.new(1, 0)
+        
+        local emojiLabel = Instance.new("TextLabel")
+        emojiLabel.Size = UDim2.new(0, 20, 1, 0)
+        emojiLabel.Position = UDim2.new(0, 16, 0, 0)
+        emojiLabel.BackgroundTransparency = 1
+        emojiLabel.Text = emoji
+        emojiLabel.TextColor3 = color
+        emojiLabel.TextSize = 14
+        emojiLabel.Font = Enum.Font.GothamBold
+        emojiLabel.TextXAlignment = Enum.TextXAlignment.Left
+        emojiLabel.Parent = btn
+        
+        return btn, inner
+    end
+
+    local radioPresserBtn, radioPresserInner = createRadio(0, "🖐️", theme.autoPresserColor)
+    local radioClickerBtn, radioClickerInner = createRadio(22, "👆", theme.autoClickerColor)
+
+    -- Botão Central OFF/ON (Tamanho padronizado)
     local autoToggleBtn = Instance.new("TextButton")
     autoToggleBtn.Size = UDim2.new(0, 90, 0, 30)
     autoToggleBtn.Position = UDim2.new(0.5, -45, 0, 26)
@@ -2026,91 +2143,228 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoToggleBtn.BackgroundTransparency = 0.2
     autoToggleBtn.Text = "OFF"
     autoToggleBtn.TextColor3 = theme.danger
-    autoToggleBtn.TextSize = 13
     autoToggleBtn.Font = Enum.Font.GothamBold
+    autoToggleBtn.TextSize = 13
     autoToggleBtn.BorderSizePixel = 2
     autoToggleBtn.BorderColor3 = theme.danger
     autoToggleBtn.Parent = autoSection
+    Instance.new("UICorner", autoToggleBtn).CornerRadius = UDim.new(0, 8)
 
-    local autoCorner = Instance.new("UICorner")
-    autoCorner.CornerRadius = UDim.new(0, 8)
-    autoCorner.Parent = autoToggleBtn
-
+    -- Status
     local autoStatusLabel = Instance.new("TextLabel")
-    autoStatusLabel.Size = UDim2.new(1, 0, 0, 16)
-    autoStatusLabel.Position = UDim2.new(0, 0, 0, 66)
+    autoStatusLabel.Size = UDim2.new(1, 0, 0, 14)
+    autoStatusLabel.Position = UDim2.new(0, 0, 0, 58)
     autoStatusLabel.BackgroundTransparency = 1
     autoStatusLabel.Text = "Ativa/Desativa com [R] • Segura [E]"
     autoStatusLabel.TextColor3 = theme.textMuted
-    autoStatusLabel.TextSize = 10
+    autoStatusLabel.TextSize = 9
     autoStatusLabel.Font = Enum.Font.Gotham
     autoStatusLabel.Parent = autoSection
 
-    local keySelectorContainer = Instance.new("Frame")
-    keySelectorContainer.Size = UDim2.new(1, 0, 0, 42)
-    keySelectorContainer.Position = UDim2.new(0, 0, 0, 84)
-    keySelectorContainer.BackgroundTransparency = 1
-    keySelectorContainer.Parent = autoSection
+    -- Área de Configuração (Sem fundo de "quadrado branco")
+    local presserConfig = Instance.new("Frame")
+    presserConfig.Size = UDim2.new(1, -20, 0, 30)
+    presserConfig.Position = UDim2.new(0, 10, 0, 80)
+    presserConfig.BackgroundTransparency = 1
+    presserConfig.Visible = true
+    presserConfig.Parent = autoSection
 
     local toggleKeyBtn = Instance.new("TextButton")
-    toggleKeyBtn.Size = UDim2.new(0.5, -6, 0, 30)
-    toggleKeyBtn.BackgroundColor3 = theme.surface2
-    toggleKeyBtn.BackgroundTransparency = 0.3
+    toggleKeyBtn.Size = UDim2.new(0.5, -5, 1, 0)
+    toggleKeyBtn.BackgroundColor3 = theme.surface3
     toggleKeyBtn.Text = "R"
     toggleKeyBtn.TextColor3 = theme.autoPresserColor
-    toggleKeyBtn.TextSize = 15
+    toggleKeyBtn.TextSize = 13
     toggleKeyBtn.Font = Enum.Font.GothamBold
-    toggleKeyBtn.BorderSizePixel = 2
-    toggleKeyBtn.BorderColor3 = theme.autoPresserColor
-    toggleKeyBtn.Parent = keySelectorContainer
-
-    local tKeyCorner = Instance.new("UICorner")
-    tKeyCorner.CornerRadius = UDim.new(0, 8)
-    tKeyCorner.Parent = toggleKeyBtn
-
-    local tKeyCaption = Instance.new("TextLabel")
-    tKeyCaption.Size = UDim2.new(0.5, -6, 0, 12)
-    tKeyCaption.Position = UDim2.new(0, 0, 1, -12)
-    tKeyCaption.BackgroundTransparency = 1
-    tKeyCaption.Text = "TECLA ATIVA"
-    tKeyCaption.TextColor3 = theme.textMuted
-    tKeyCaption.TextSize = 8
-    tKeyCaption.Font = Enum.Font.GothamBold
-    tKeyCaption.Parent = keySelectorContainer
+    toggleKeyBtn.Parent = presserConfig
+    Instance.new("UICorner", toggleKeyBtn).CornerRadius = UDim.new(0, 6)
 
     local pressKeyBtn = Instance.new("TextButton")
-    pressKeyBtn.Size = UDim2.new(0.5, -6, 0, 30)
-    pressKeyBtn.Position = UDim2.new(0.5, 6, 0, 0)
-    pressKeyBtn.BackgroundColor3 = theme.surface2
-    pressKeyBtn.BackgroundTransparency = 0.3
+    pressKeyBtn.Size = UDim2.new(0.5, -5, 1, 0)
+    pressKeyBtn.Position = UDim2.new(0.5, 5, 0, 0)
+    pressKeyBtn.BackgroundColor3 = theme.surface3
     pressKeyBtn.Text = "E"
     pressKeyBtn.TextColor3 = theme.autoPresserColor
-    pressKeyBtn.TextSize = 15
+    pressKeyBtn.TextSize = 13
     pressKeyBtn.Font = Enum.Font.GothamBold
-    pressKeyBtn.BorderSizePixel = 2
-    pressKeyBtn.BorderColor3 = theme.autoPresserColor
-    pressKeyBtn.Parent = keySelectorContainer
+    pressKeyBtn.Parent = presserConfig
+    Instance.new("UICorner", pressKeyBtn).CornerRadius = UDim.new(0, 6)
 
-    local pKeyCorner = Instance.new("UICorner")
-    pKeyCorner.CornerRadius = UDim.new(0, 8)
-    pKeyCorner.Parent = pressKeyBtn
+    local clickerConfig = Instance.new("Frame")
+    clickerConfig.Size = UDim2.new(1, -20, 0, 30)
+    clickerConfig.Position = UDim2.new(0, 10, 0, 80)
+    clickerConfig.BackgroundTransparency = 1
+    clickerConfig.Visible = false
+    clickerConfig.Parent = autoSection
 
-    local pKeyCaption = Instance.new("TextLabel")
-    pKeyCaption.Size = UDim2.new(0.5, -6, 0, 12)
-    pKeyCaption.Position = UDim2.new(0.5, 6, 1, -12)
-    pKeyCaption.BackgroundTransparency = 1
-    pKeyCaption.Text = "TECLA SEGURA"
-    pKeyCaption.TextColor3 = theme.textMuted
-    pKeyCaption.TextSize = 8
-    pKeyCaption.Font = Enum.Font.GothamBold
-    pKeyCaption.Parent = keySelectorContainer
+    local clickerKeyBtn = Instance.new("TextButton")
+    clickerKeyBtn.Size = UDim2.new(1, 0, 1, 0)
+    clickerKeyBtn.BackgroundColor3 = theme.surface3
+    clickerKeyBtn.Text = "F"
+    clickerKeyBtn.TextColor3 = theme.autoClickerColor
+    clickerKeyBtn.TextSize = 13
+    clickerKeyBtn.Font = Enum.Font.GothamBold
+    clickerKeyBtn.Parent = clickerConfig
+    Instance.new("UICorner", clickerKeyBtn).CornerRadius = UDim.new(0, 6)
+
+    -- Lógica de UI da Sessão
+    local currentMode = "presser"
+
+    local function updateSessionUI()
+        if currentMode == "presser" then
+            radioPresserInner.BackgroundTransparency = 0
+            radioClickerInner.BackgroundTransparency = 1
+            presserConfig.Visible = true
+            clickerConfig.Visible = false
+        else
+            radioPresserInner.BackgroundTransparency = 1
+            radioClickerInner.BackgroundTransparency = 0
+            presserConfig.Visible = false
+            clickerConfig.Visible = true
+        end
+        
+        -- Verifica o estado da ferramenta atualmente selecionada
+        local isEnabled = false
+        if currentMode == "presser" then
+            isEnabled = autoPresserModule.isEnabled
+        else
+            isEnabled = autoClickerModule.isEnabled
+        end
+        
+        -- Atualiza o visual do botão OFF/ON
+        if isEnabled then
+            autoToggleBtn.Text = "ON"
+            autoToggleBtn.BackgroundColor3 = theme.success
+            autoToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            autoToggleBtn.BorderColor3 = theme.success
+            autoToggleBtn.BackgroundTransparency = 0.15
+        else
+            autoToggleBtn.Text = "OFF"
+            autoToggleBtn.BackgroundColor3 = theme.danger
+            autoToggleBtn.TextColor3 = theme.danger
+            autoToggleBtn.BorderColor3 = theme.danger
+            autoToggleBtn.BackgroundTransparency = 0.2
+        end
+        
+        -- Atualiza o texto de status
+        if currentMode == "presser" then
+            if autoPresserModule.isEnabled then
+                if autoPresserModule.isHolding then
+                    autoStatusLabel.Text = "Segurando [" .. autoPresserModule.pressKey.Name .. "]"
+                    autoStatusLabel.TextColor3 = theme.success
+                else
+                    autoStatusLabel.Text = "Pressione [" .. autoPresserModule.toggleKey.Name .. "] para segurar"
+                    autoStatusLabel.TextColor3 = theme.textSecondary
+                end
+            else
+                autoStatusLabel.Text = "Ativa/Desativa com [" .. autoPresserModule.toggleKey.Name .. "] • Segura [" .. autoPresserModule.pressKey.Name .. "]"
+                autoStatusLabel.TextColor3 = theme.textMuted
+            end
+        else
+            if autoClickerModule.isEnabled then
+                if autoClickerModule.isClicking then
+                    autoStatusLabel.Text = "CLICANDO! Pressione [" .. autoClickerModule.activationKey.Name .. "] para parar"
+                    autoStatusLabel.TextColor3 = theme.success
+                else
+                    autoStatusLabel.Text = "Pressione [" .. autoClickerModule.activationKey.Name .. "] para iniciar (CPS: 500)"
+                    autoStatusLabel.TextColor3 = theme.textSecondary
+                end
+            else
+                autoStatusLabel.Text = "Pressione [" .. autoClickerModule.activationKey.Name .. "] para alternar (CPS: 500)"
+                autoStatusLabel.TextColor3 = theme.textMuted
+            end
+        end
+    end
+
+    radioPresserBtn.MouseButton1Click:Connect(function()
+        if currentMode == "presser" then return end
+        currentMode = "presser"
+        updateSessionUI()
+    end)
+
+    radioClickerBtn.MouseButton1Click:Connect(function()
+        if currentMode == "clicker" then return end
+        currentMode = "clicker"
+        updateSessionUI()
+    end)
+
+    autoToggleBtn.MouseButton1Click:Connect(function()
+        if currentMode == "presser" then
+            if autoPresserModule.isEnabled then
+                autoPresserModule:disable()
+            else
+                autoPresserModule:enable()
+            end
+        else
+            if autoClickerModule.isEnabled then
+                autoClickerModule:disable()
+            else
+                autoClickerModule:enable()
+            end
+        end
+        updateSessionUI()
+    end)
+
+    -- Configuração de Teclas
+    local capturingFor = nil
+    local captureConnection = nil
+
+    local function stopCapturing()
+        if captureConnection then captureConnection:Disconnect() captureConnection = nil end
+        capturingFor = nil
+        toggleKeyBtn.Text = autoPresserModule.toggleKey.Name
+        pressKeyBtn.Text = autoPresserModule.pressKey.Name
+        clickerKeyBtn.Text = autoClickerModule.activationKey.Name
+        updateSessionUI()
+    end
+
+    local function startCapturing(mode)
+        if capturingFor then stopCapturing() end
+        capturingFor = mode
+        
+        if mode == "toggle" then toggleKeyBtn.Text = "..."
+        elseif mode == "press" then pressKeyBtn.Text = "..."
+        else clickerKeyBtn.Text = "..." end
+        
+        captureConnection = UIS.InputBegan:Connect(function(input, gp)
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            if input.KeyCode == Enum.KeyCode.Escape then stopCapturing() return end
+            
+            if capturingFor == "toggle" then
+                autoPresserModule.toggleKey = input.KeyCode
+                if autoPresserModule.isEnabled then
+                    autoPresserModule:_disconnectKeyToggle()
+                    autoPresserModule:_connectKeyToggle()
+                end
+            elseif capturingFor == "press" then
+                autoPresserModule.pressKey = input.KeyCode
+            else
+                autoClickerModule.activationKey = input.KeyCode
+            end
+            stopCapturing()
+        end)
+    end
+
+    toggleKeyBtn.MouseButton1Click:Connect(function() startCapturing("toggle") end)
+    pressKeyBtn.MouseButton1Click:Connect(function() startCapturing("press") end)
+    clickerKeyBtn.MouseButton1Click:Connect(function() startCapturing("clicker") end)
+
+    autoPresserModule.onHoldChanged = function()
+        if currentMode == "presser" then updateSessionUI() end
+    end
+
+    autoClickerModule.onStateChanged = function()
+        if currentMode == "clicker" then updateSessionUI() end
+    end
+
+    updateSessionUI() -- Inicializa
 
     -- ============================================
-    -- FLY
+    -- FLY (PÁGINA 1)
     -- ============================================
     local flySection = Instance.new("Frame")
     flySection.Size = UDim2.new(1, 0, 0, 116)
-    flySection.Position = UDim2.new(0, 0, 0, 532)
+    flySection.Position = UDim2.new(0, 0, 0, 520)
     flySection.BackgroundTransparency = 1
     flySection.Parent = page1
 
@@ -2481,7 +2735,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- ============================================
     local hitboxSection = Instance.new("Frame")
     hitboxSection.Size = UDim2.new(1, 0, 0, 84)
-    hitboxSection.Position = UDim2.new(0, 0, 0, 238)
+    hitboxSection.Position = UDim2.new(0, 0, 0, 262)
     hitboxSection.BackgroundTransparency = 1
     hitboxSection.Parent = page2
 
@@ -2577,7 +2831,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     hitboxStatusLabel.Parent = hitboxSection
 
     -- ============================================
-    -- SLIDERS
+    -- SLIDERS GERAIS
     -- ============================================
     local speedIsActive = false
     local speedMin, speedMax = 5, 500
@@ -2811,109 +3065,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     updatePaginationVisuals()
 
     -- ============================================
-    -- HANDLER AUTO PRESSER
-    -- ============================================
-    local function updateAutoStatus()
-        local kT = autoPresserModule.toggleKey.Name
-        local kP = autoPresserModule.pressKey.Name
-        if not autoPresserModule.isEnabled then
-            autoToggleBtn.Text = "OFF"
-            autoToggleBtn.TextColor3 = theme.danger
-            autoToggleBtn.BackgroundColor3 = theme.danger
-            autoToggleBtn.BackgroundTransparency = 0.2
-            autoToggleBtn.BorderColor3 = theme.danger
-            local g = autoToggleBtn:FindFirstChildOfClass("UIGradient")
-            if g then g:Destroy() end
-            autoStatusLabel.Text = string.format("Ativa/Desativa com [%s] • Segura [%s]", kT, kP)
-            autoStatusLabel.TextColor3 = theme.textMuted
-        else
-            autoToggleBtn.Text = "ON"
-            autoToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            autoToggleBtn.BackgroundColor3 = theme.success
-            autoToggleBtn.BackgroundTransparency = 0.15
-            autoToggleBtn.BorderColor3 = theme.success
-            local g = autoToggleBtn:FindFirstChildOfClass("UIGradient")
-            if not g then g = Instance.new("UIGradient") g.Parent = autoToggleBtn end
-            g.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 118)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 150, 80)),
-            })
-            g.Rotation = 90
-            if autoPresserModule.isHolding then
-                autoStatusLabel.Text = string.format("Pressione [%s] para parar • Segurando [%s]", kT, kP)
-                autoStatusLabel.TextColor3 = Color3.fromRGB(180, 255, 210)
-            else
-                autoStatusLabel.Text = string.format("Pressione [%s] para segurar [%s]", kT, kP)
-                autoStatusLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
-            end
-        end
-    end
-
-    autoPresserModule.onHoldChanged = function() updateAutoStatus() end
-
-    autoToggleBtn.MouseButton1Click:Connect(function()
-        playClickSound()
-        autoPresserModule:toggle()
-        updateAutoStatus()
-    end)
-
-    local capturingFor = nil
-    local captureConnection = nil
-
-    local function stopCapturing()
-        if captureConnection then captureConnection:Disconnect() captureConnection = nil end
-        capturingFor = nil
-        toggleKeyBtn.Text = autoPresserModule.toggleKey.Name
-        toggleKeyBtn.TextColor3 = theme.autoPresserColor
-        toggleKeyBtn.BorderColor3 = theme.autoPresserColor
-        toggleKeyBtn.TextSize = 15
-        pressKeyBtn.Text = autoPresserModule.pressKey.Name
-        pressKeyBtn.TextColor3 = theme.autoPresserColor
-        pressKeyBtn.BorderColor3 = theme.autoPresserColor
-        pressKeyBtn.TextSize = 15
-    end
-
-    local function startCapturing(mode)
-        if capturingFor then stopCapturing() end
-        capturingFor = mode
-        if mode == "toggle" then
-            toggleKeyBtn.Text = "..."
-            toggleKeyBtn.TextColor3 = theme.warning
-            toggleKeyBtn.BorderColor3 = theme.warning
-            toggleKeyBtn.TextSize = 13
-        else
-            pressKeyBtn.Text = "..."
-            pressKeyBtn.TextColor3 = theme.warning
-            pressKeyBtn.BorderColor3 = theme.warning
-            pressKeyBtn.TextSize = 13
-        end
-        captureConnection = UIS.InputBegan:Connect(function(input, gp)
-            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-            if input.KeyCode == Enum.KeyCode.Escape then stopCapturing() return end
-            if capturingFor == "toggle" then
-                autoPresserModule.toggleKey = input.KeyCode
-            else
-                autoPresserModule.pressKey = input.KeyCode
-            end
-            if autoPresserModule.isEnabled then
-                autoPresserModule:_disconnectKeyToggle()
-                autoPresserModule:_connectKeyToggle()
-            end
-            updateAutoStatus()
-            stopCapturing()
-        end)
-    end
-
-    toggleKeyBtn.MouseButton1Click:Connect(function()
-        playClickSound()
-        startCapturing("toggle")
-    end)
-    pressKeyBtn.MouseButton1Click:Connect(function()
-        playClickSound()
-        startCapturing("press")
-    end)
-
-    -- ============================================
     -- HANDLERS DOS TOGGLES
     -- ============================================
     local function toggleVisual(btn, isOn)
@@ -3041,6 +3192,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         pcall(function() espModule:disable() end)
         pcall(function() noclipModule:disable() end)
         pcall(function() autoPresserModule:disable() end)
+        pcall(function() autoClickerModule:disable() end)
         pcall(function() hitboxModule:disable() end)
         pcall(function() flyModule:disable() end)
         pcall(function() aimbotModule:disable() end)
@@ -3050,13 +3202,13 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     mainFrame.BackgroundTransparency = 1
     mainFrame.Size = UDim2.new(0, 200, 0, 660)
-    mainFrame.Position = UDim2.new(0.5, -100, 0.5, -330)
+    mainFrame.Position = UDim2.new(0.5, -100, 0, 30)
 
     task.spawn(function()
         task.wait(0.1)
         TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Size = UDim2.new(0, 220, 0, 720),
-            Position = UDim2.new(0.5, -110, 0.5, -360),
+            Position = UDim2.new(0.5, -110, 0, 40),
             BackgroundTransparency = 0.08,
         }):Play()
     end)
@@ -3074,23 +3226,25 @@ local jumpModule = InfiniteJumpModule.new(config)
 local espModule = ESPModule.new(config)
 local noclipModule = NoclipModule.new(config)
 
--- Conecta o Noclip ao Pulo Infinito para atravessar tetos
 jumpModule.noclipModule = noclipModule
 
 local autoPresserModule = AutoPresserModule.new(config)
+local autoClickerModule = AutoClickerModule.new(config)
 local hitboxModule = HitboxModule.new(config)
 local flyModule = FlyModule.new(config)
 local aimbotModule = AimbotModule.new(config)
 local tpClickModule = TPClickModule.new(config)
 
-speedModule:initialize()
+task.spawn(function()
+    speedModule:initialize()
+end)
 
 local ok, err = pcall(function()
-    createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, hitboxModule, flyModule, aimbotModule, tpClickModule)
+    createUI(speedModule, jumpModule, espModule, noclipModule, autoPresserModule, autoClickerModule, hitboxModule, flyModule, aimbotModule, tpClickModule)
 end)
 
 if ok then
-    print("✅ Basic Settings Control v1.0.0 carregado!")
+    print("✅ Basic Settings Control v1.1.1 carregado!")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
 end
