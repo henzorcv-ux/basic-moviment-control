@@ -1,10 +1,9 @@
 --[[
-    Basic Settings Control v1.1.1
+    Basic Settings Control v1.0.0
     Velocidade | Pulo | ESP | Noclip | Auto Presser/Clicker | Fly (pág.1) | Aim | TP Click | Hitbox (pág.2) | Anti-AFK
 
-    v1.1.1:
-    - Correção de estado: Auto Presser e Auto Clicker mantêm-se ativados ao alternar entre as bolinhas.
-    - O botão central e o texto de status refletem o estado real da ferramenta selecionada.
+    v1.1.3:
+    - Ajuste visual: posição do radioContainer (bolinhas de seleção) alterada para UDim2.new(1, -40, 0.15, 0)
 --]]
 
 -- ============================================
@@ -671,6 +670,8 @@ function AutoPresserModule:_disconnectKeyToggle()
 end
 
 function AutoPresserModule:_holdKey()
+    pcall(function() VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game) end)
+    task.wait(0.015)
     pcall(function() VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game) end)
     self.isKeyHeld = true
 end
@@ -686,10 +687,18 @@ function AutoPresserModule:_startReinforce()
     self.reinforceThread = task.spawn(function()
         while self.isHolding do
             task.wait(0.05)
-            if self.isHolding then
-                pcall(function() VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game) end)
-                self.isKeyHeld = true
+            if not self.isHolding then break end
+            
+            pcall(function() VirtualInputManager:SendKeyEvent(false, self.pressKey, false, game) end)
+            task.wait(0.015)
+            
+            if not self.isHolding then
+                self.isKeyHeld = false
+                break
             end
+            
+            pcall(function() VirtualInputManager:SendKeyEvent(true, self.pressKey, false, game) end)
+            self.isKeyHeld = true
         end
         self.reinforceThread = nil
     end)
@@ -784,7 +793,6 @@ function AutoClickerModule:enable()
     self.isEnabled = true
     self.config:set("features.autoClicker", true)
     
-    -- Toggle Logic: Press key to start, press again to stop
     if self.keyConnection then self.keyConnection:Disconnect() end
     self.keyConnection = UIS.InputBegan:Connect(function(input, gp)
         if gp then return end
@@ -1427,7 +1435,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
 
     local mainFrame = Instance.new("Frame")
     mainFrame.Size = UDim2.new(0, 220, 0, 720)
-    mainFrame.Position = UDim2.new(0.5, -110, 0, 40) -- Fixado no topo para sempre ser visível
+    mainFrame.Position = UDim2.new(0.5, -110, 0, 40)
     mainFrame.BackgroundColor3 = theme.background
     mainFrame.BackgroundTransparency = 0.08
     mainFrame.BorderSizePixel = 0
@@ -2088,7 +2096,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoTitle.TextXAlignment = Enum.TextXAlignment.Left
     autoTitle.Parent = autoTitleContainer
 
-    -- Radio Buttons (Lado Direito, sem fundo branco)
+    -- ALTERAÇÃO APLICADA AQUI: Posição do radioContainer
     local radioContainer = Instance.new("Frame")
     radioContainer.Size = UDim2.new(0, 60, 0, 44)
     radioContainer.Position = UDim2.new(1, -40, 0.15, 0)
@@ -2135,7 +2143,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     local radioPresserBtn, radioPresserInner = createRadio(0, "🖐️", theme.autoPresserColor)
     local radioClickerBtn, radioClickerInner = createRadio(22, "👆", theme.autoClickerColor)
 
-    -- Botão Central OFF/ON (Tamanho padronizado)
     local autoToggleBtn = Instance.new("TextButton")
     autoToggleBtn.Size = UDim2.new(0, 90, 0, 30)
     autoToggleBtn.Position = UDim2.new(0.5, -45, 0, 26)
@@ -2150,7 +2157,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoToggleBtn.Parent = autoSection
     Instance.new("UICorner", autoToggleBtn).CornerRadius = UDim.new(0, 8)
 
-    -- Status
     local autoStatusLabel = Instance.new("TextLabel")
     autoStatusLabel.Size = UDim2.new(1, 0, 0, 14)
     autoStatusLabel.Position = UDim2.new(0, 0, 0, 58)
@@ -2161,7 +2167,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoStatusLabel.Font = Enum.Font.Gotham
     autoStatusLabel.Parent = autoSection
 
-    -- Área de Configuração (Sem fundo de "quadrado branco")
     local presserConfig = Instance.new("Frame")
     presserConfig.Size = UDim2.new(1, -20, 0, 30)
     presserConfig.Position = UDim2.new(0, 10, 0, 80)
@@ -2207,7 +2212,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     clickerKeyBtn.Parent = clickerConfig
     Instance.new("UICorner", clickerKeyBtn).CornerRadius = UDim.new(0, 6)
 
-    -- Lógica de UI da Sessão
     local currentMode = "presser"
 
     local function updateSessionUI()
@@ -2223,7 +2227,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             clickerConfig.Visible = true
         end
         
-        -- Verifica o estado da ferramenta atualmente selecionada
         local isEnabled = false
         if currentMode == "presser" then
             isEnabled = autoPresserModule.isEnabled
@@ -2231,7 +2234,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             isEnabled = autoClickerModule.isEnabled
         end
         
-        -- Atualiza o visual do botão OFF/ON
         if isEnabled then
             autoToggleBtn.Text = "ON"
             autoToggleBtn.BackgroundColor3 = theme.success
@@ -2246,7 +2248,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
             autoToggleBtn.BackgroundTransparency = 0.2
         end
         
-        -- Atualiza o texto de status
         if currentMode == "presser" then
             if autoPresserModule.isEnabled then
                 if autoPresserModule.isHolding then
@@ -2305,7 +2306,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         updateSessionUI()
     end)
 
-    -- Configuração de Teclas
     local capturingFor = nil
     local captureConnection = nil
 
@@ -2357,7 +2357,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         if currentMode == "clicker" then updateSessionUI() end
     end
 
-    updateSessionUI() -- Inicializa
+    updateSessionUI()
 
     -- ============================================
     -- FLY (PÁGINA 1)
@@ -3244,7 +3244,7 @@ local ok, err = pcall(function()
 end)
 
 if ok then
-    print("✅ Basic Settings Control v1.1.1 carregado!")
+    print("✅ Basic Settings Control v1.1.3 carregado!")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
 end
