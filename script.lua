@@ -1,5 +1,5 @@
 --[[
-    Basic Settings Control v1.0.0
+    Basic Settings Control v1.1.3
     Velocidade | Pulo | ESP | Noclip | Auto Presser/Clicker | Fly (pág.1) | Aim | TP Click | Hitbox (pág.2) | Anti-AFK
 
     v1.1.3:
@@ -2735,7 +2735,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     -- ============================================
     local hitboxSection = Instance.new("Frame")
     hitboxSection.Size = UDim2.new(1, 0, 0, 84)
-    hitboxSection.Position = UDim2.new(0, 0, 0, 262)
+    hitboxSection.Position = UDim2.new(0, 0, 0, 240)
     hitboxSection.BackgroundTransparency = 1
     hitboxSection.Parent = page2
 
