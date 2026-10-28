@@ -2,8 +2,9 @@
     Basic Settings Control v1.0.0
     Velocidade | Pulo | ESP | Noclip | Auto Presser/Clicker | Fly (pág.1) | Aim | TP Click | Hitbox (pág.2) | Anti-AFK
 
-    v1.0.0:
-    - Botões da sessão Auto reduzidos (~15-20%).
+    v1.0.3:
+    - Correção: O Aimbot e o Auto Shoot pausam automaticamente quando o jogador local morre.
+    - Eles voltam a funcionar normalmente assim que o jogador respawna.
 --]]
 
 -- ============================================
@@ -1068,6 +1069,8 @@ function AimbotModule.new(config)
     self.wallCheck = config:get("aimbot.wallCheck") ~= false
     self.currentTarget = nil
     self.onFOVChanged = nil
+    self.autoShoot = false
+    self.lastShootTime = 0
     return self
 end
 
@@ -1118,6 +1121,23 @@ function AimbotModule:_aimAt(target)
     self.camera.CFrame = CFrame.new(self.camera.CFrame.Position, aimPart.Position)
 end
 
+function AimbotModule:_isMouseOverUI()
+    local gui = CoreGui:FindFirstChild("BasicSettingsControlGUI")
+    if not gui then return false end
+    local mainFrame = gui:FindFirstChild("Frame")
+    if not mainFrame or not mainFrame.Visible then return false end
+    
+    local mousePos = UIS:GetMouseLocation()
+    local pos = mainFrame.AbsolutePosition
+    local size = mainFrame.AbsoluteSize
+    
+    if mousePos.X >= pos.X and mousePos.X <= pos.X + size.X and
+       mousePos.Y >= pos.Y and mousePos.Y <= pos.Y + size.Y then
+        return true
+    end
+    return false
+end
+
 function AimbotModule:enable()
     if self.isEnabled then return end
     self.isEnabled = true
@@ -1128,10 +1148,40 @@ function AimbotModule:enable()
         if not self.isEnabled then return end
         self.camera = workspace.CurrentCamera
         if not self.camera then return end
+
+        -- VERIFICA SE O JOGADOR LOCAL ESTÁ VIVO
+        local localChar = player.Character
+        local localHum = localChar and localChar:FindFirstChildOfClass("Humanoid")
+        if not localChar or not localHum or localHum.Health <= 0 then
+            self.currentTarget = nil
+            return -- Se morto, cancela a mira e o tiro neste frame
+        end
+        
         local target = self:_getTarget()
         if target then
             self.currentTarget = target
             self:_aimAt(target)
+            
+            -- Lógica do Auto Shoot (só atira se o mouse NÃO estiver no painel)
+            if self.autoShoot then
+                if not self:_isMouseOverUI() then
+                    local targetChar = target.Character
+                    local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+                    
+                    if targetHum and targetHum.Health > 0 then
+                        local now = tick()
+                        if now - self.lastShootTime >= 0.05 then -- Atira a cada 0.05s (20 tiros/s)
+                            self.lastShootTime = now
+                            local centerX = self.camera.ViewportSize.X / 2
+                            local centerY = self.camera.ViewportSize.Y / 2
+                            pcall(function()
+                                VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1)
+                                VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1)
+                            end)
+                        end
+                    end
+                end
+            end
         else
             self.currentTarget = nil
         end
@@ -1160,6 +1210,11 @@ function AimbotModule:setFOV(sliderValue)
     if self.onFOVChanged then
         self.onFOVChanged(self.fov)
     end
+end
+
+function AimbotModule:toggleAutoShoot()
+    self.autoShoot = not self.autoShoot
+    return self.autoShoot
 end
 
 -- ============================================
@@ -2165,7 +2220,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     toggleKeyBtn.BackgroundColor3 = theme.surface3
     toggleKeyBtn.Text = "R"
     toggleKeyBtn.TextColor3 = theme.autoPresserColor
-    toggleKeyBtn.TextSize = 16
+    toggleKeyBtn.TextSize = 12
     toggleKeyBtn.Font = Enum.Font.GothamBold
     toggleKeyBtn.Parent = presserConfig
     Instance.new("UICorner", toggleKeyBtn).CornerRadius = UDim.new(0, 6)
@@ -2176,7 +2231,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     pressKeyBtn.BackgroundColor3 = theme.surface3
     pressKeyBtn.Text = "E"
     pressKeyBtn.TextColor3 = theme.autoPresserColor
-    pressKeyBtn.TextSize = 16
+    pressKeyBtn.TextSize = 12
     pressKeyBtn.Font = Enum.Font.GothamBold
     pressKeyBtn.Parent = presserConfig
     Instance.new("UICorner", pressKeyBtn).CornerRadius = UDim.new(0, 6)
@@ -2193,7 +2248,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     clickerKeyBtn.BackgroundColor3 = theme.surface3
     clickerKeyBtn.Text = "F"
     clickerKeyBtn.TextColor3 = theme.autoClickerColor
-    clickerKeyBtn.TextSize = 16
+    clickerKeyBtn.TextSize = 12
     clickerKeyBtn.Font = Enum.Font.GothamBold
     clickerKeyBtn.Parent = clickerConfig
     Instance.new("UICorner", clickerKeyBtn).CornerRadius = UDim.new(0, 6)
@@ -2522,8 +2577,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotContent.Parent = aimbotSection
 
     local aimbotToggleBtn = Instance.new("TextButton")
-    aimbotToggleBtn.Size = UDim2.new(0, 90, 0, 34)
-    aimbotToggleBtn.Position = UDim2.new(0, 20, 0.5, -17)
+    aimbotToggleBtn.Size = UDim2.new(0, 70, 0, 34)
+    aimbotToggleBtn.Position = UDim2.new(0, 15, 0.5, -17)
     aimbotToggleBtn.BackgroundColor3 = theme.danger
     aimbotToggleBtn.BackgroundTransparency = 0.2
     aimbotToggleBtn.Text = "OFF"
@@ -2539,8 +2594,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotBtnCorner.Parent = aimbotToggleBtn
 
     local fovShowBtn = Instance.new("TextButton")
-    fovShowBtn.Size = UDim2.new(0, 26, 0, 28)
-    fovShowBtn.Position = UDim2.new(0, 112, 0.5, -14)
+    fovShowBtn.Size = UDim2.new(0, 28, 0, 28)
+    fovShowBtn.Position = UDim2.new(0, 95, 0.5, -32)
     fovShowBtn.BackgroundColor3 = theme.surface2
     fovShowBtn.BackgroundTransparency = 0.3
     fovShowBtn.Text = "◯"
@@ -2554,6 +2609,23 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     local fovShowBtnCorner = Instance.new("UICorner")
     fovShowBtnCorner.CornerRadius = UDim.new(0, 8)
     fovShowBtnCorner.Parent = fovShowBtn
+
+    local autoShootBtn = Instance.new("TextButton")
+    autoShootBtn.Size = UDim2.new(0, 28, 0, 28)
+    autoShootBtn.Position = UDim2.new(0, 95, 0.5, 4)
+    autoShootBtn.BackgroundColor3 = theme.surface2
+    autoShootBtn.BackgroundTransparency = 0.3
+    autoShootBtn.Text = "🔫"
+    autoShootBtn.TextColor3 = theme.textMuted
+    autoShootBtn.TextSize = 14
+    autoShootBtn.Font = Enum.Font.GothamBold
+    autoShootBtn.BorderSizePixel = 2
+    autoShootBtn.BorderColor3 = theme.danger
+    autoShootBtn.Parent = aimbotContent
+
+    local autoShootBtnCorner = Instance.new("UICorner")
+    autoShootBtnCorner.CornerRadius = UDim.new(0, 8)
+    autoShootBtnCorner.Parent = autoShootBtn
 
     local aimbotSliderColumn = Instance.new("Frame")
     aimbotSliderColumn.Size = UDim2.new(0, 44, 0, 88)
@@ -3131,6 +3203,22 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         end
     end)
 
+    autoShootBtn.MouseButton1Click:Connect(function()
+        playClickSound()
+        local isOn = aimbotModule:toggleAutoShoot()
+        if isOn then
+            autoShootBtn.TextColor3 = theme.success
+            autoShootBtn.BackgroundColor3 = theme.success
+            autoShootBtn.BackgroundTransparency = 0.85
+            autoShootBtn.BorderColor3 = theme.success
+        else
+            autoShootBtn.TextColor3 = theme.textMuted
+            autoShootBtn.BackgroundColor3 = theme.surface2
+            autoShootBtn.BackgroundTransparency = 0.3
+            autoShootBtn.BorderColor3 = theme.danger
+        end
+    end)
+
     tpToggleBtn.MouseButton1Click:Connect(function()
         local isOn = tpClickModule:toggle()
         toggleVisual(tpToggleBtn, isOn)
@@ -3223,7 +3311,7 @@ local ok, err = pcall(function()
 end)
 
 if ok then
-    print("✅ Basic Settings Control v1.0.0 carregado!")
+    print("✅ Basic Settings Control v1.0.3 carregado!")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
 end
