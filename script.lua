@@ -1,10 +1,7 @@
 --[[
     Basic Settings Control v1.0.0
     Velocidade | Pulo | ESP | Noclip | Auto Presser/Clicker | Fly (pág.1) | Aim | TP Click | Hitbox (pág.2) | Anti-AFK
-
-    v1.0.0:
-    - Cor da imagem do Auto Shoot clareada para melhor visibilidade.
---]]
+]]
 
 -- ============================================
 -- SERVIÇOS
@@ -2574,8 +2571,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotContent.Parent = aimbotSection
 
     local aimbotToggleBtn = Instance.new("TextButton")
-    aimbotToggleBtn.Size = UDim2.new(0, 70, 0, 34)
-    aimbotToggleBtn.Position = UDim2.new(0, 15, 0.5, -17)
+    aimbotToggleBtn.Size = UDim2.new(0, 110, 0, 32)
+    aimbotToggleBtn.Position = UDim2.new(0, 8, 0, 8)
     aimbotToggleBtn.BackgroundColor3 = theme.danger
     aimbotToggleBtn.BackgroundTransparency = 0.2
     aimbotToggleBtn.Text = "OFF"
@@ -2591,8 +2588,8 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     aimbotBtnCorner.Parent = aimbotToggleBtn
 
     local fovShowBtn = Instance.new("TextButton")
-    fovShowBtn.Size = UDim2.new(0, 28, 0, 28)
-    fovShowBtn.Position = UDim2.new(0, 95, 0.5, -32)
+    fovShowBtn.Size = UDim2.new(0, 26, 0, 26)
+    fovShowBtn.Position = UDim2.new(1, -75, 0, 10)
     fovShowBtn.BackgroundColor3 = theme.surface2
     fovShowBtn.BackgroundTransparency = 0.3
     fovShowBtn.Text = "◯"
@@ -2607,13 +2604,18 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     fovShowBtnCorner.CornerRadius = UDim.new(0, 8)
     fovShowBtnCorner.Parent = fovShowBtn
 
-    local autoShootBtn = Instance.new("ImageButton")
-    autoShootBtn.Size = UDim2.new(0, 28, 0, 28)
-    autoShootBtn.Position = UDim2.new(0, 95, 0.5, 4)
+    -- Botão Auto Shoot com ImagemLabel no fundo
+    local autoShootBtn = Instance.new("TextButton") 
+    autoShootBtn.Size = UDim2.new(0, 110, 0, 32)
+    autoShootBtn.Position = UDim2.new(0, 8, 0, 48) 
     autoShootBtn.BackgroundColor3 = theme.surface2
-    autoShootBtn.BackgroundTransparency = 0.3
-    autoShootBtn.Image = "rbxthumb://type=Asset&id=124762326682646&w=150&h=150"
-    autoShootBtn.ImageColor3 = Color3.fromRGB(240, 240, 240)
+    autoShootBtn.BackgroundTransparency = 0.2
+    autoShootBtn.Text = "AUTO SHOT"
+    autoShootBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    autoShootBtn.TextSize = 12
+    autoShootBtn.Font = Enum.Font.GothamBold
+    autoShootBtn.TextStrokeTransparency = 0.1
+    autoShootBtn.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     autoShootBtn.BorderSizePixel = 2
     autoShootBtn.BorderColor3 = theme.danger
     autoShootBtn.Parent = aimbotContent
@@ -2622,9 +2624,22 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     autoShootBtnCorner.CornerRadius = UDim.new(0, 8)
     autoShootBtnCorner.Parent = autoShootBtn
 
+    local autoShootBg = Instance.new("ImageLabel")
+    autoShootBg.Size = UDim2.new(1, 0, 1, 0)
+    autoShootBg.BackgroundTransparency = 1
+    autoShootBg.ScaleType = Enum.ScaleType.Stretch
+    autoShootBg.ZIndex = 1
+    autoShootBg.Parent = autoShootBtn
+
+    pcall(function()
+        autoShootBg.Image = "rbxassetid://115641514656406"
+        autoShootBg.ImageColor3 = Color3.fromRGB(150, 150, 150)
+        autoShootBg.ImageTransparency = 0.5
+    end)
+
     local aimbotSliderColumn = Instance.new("Frame")
     aimbotSliderColumn.Size = UDim2.new(0, 44, 0, 88)
-    aimbotSliderColumn.Position = UDim2.new(1, -52, 0, 0)
+    aimbotSliderColumn.Position = UDim2.new(1, -45, 0, 0)
     aimbotSliderColumn.BackgroundTransparency = 1
     aimbotSliderColumn.Parent = aimbotContent
 
@@ -3202,15 +3217,15 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         playClickSound()
         local isOn = aimbotModule:toggleAutoShoot()
         if isOn then
-            autoShootBtn.ImageColor3 = theme.success
-            autoShootBtn.BackgroundColor3 = theme.success
-            autoShootBtn.BackgroundTransparency = 0.85
+            autoShootBtn.TextColor3 = theme.success
             autoShootBtn.BorderColor3 = theme.success
+            autoShootBtn.TextTransparency = 0 -- Garante a mesma opacidade
+            -- Não mexer na cor/transparência da imagem para não sobrepor o texto
         else
-            autoShootBtn.ImageColor3 = Color3.fromRGB(240, 240, 240)
-            autoShootBtn.BackgroundColor3 = theme.surface2
-            autoShootBtn.BackgroundTransparency = 0.3
+            autoShootBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             autoShootBtn.BorderColor3 = theme.danger
+            autoShootBtn.TextTransparency = 0
+            -- Não mexer na cor/transparência da imagem para não sobrepor o texto
         end
     end)
 
