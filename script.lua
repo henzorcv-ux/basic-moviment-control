@@ -2,9 +2,8 @@
     Basic Settings Control v1.0.0
     Velocidade | Pulo | ESP | Noclip | Auto Presser/Clicker | Fly (pág.1) | Aim | TP Click | Hitbox (pág.2) | Anti-AFK
 
-    v1.0.3:
-    - Correção: O Aimbot e o Auto Shoot pausam automaticamente quando o jogador local morre.
-    - Eles voltam a funcionar normalmente assim que o jogador respawna.
+    v1.0.0:
+    - Cor da imagem do Auto Shoot clareada para melhor visibilidade.
 --]]
 
 -- ============================================
@@ -1149,12 +1148,11 @@ function AimbotModule:enable()
         self.camera = workspace.CurrentCamera
         if not self.camera then return end
 
-        -- VERIFICA SE O JOGADOR LOCAL ESTÁ VIVO
         local localChar = player.Character
         local localHum = localChar and localChar:FindFirstChildOfClass("Humanoid")
         if not localChar or not localHum or localHum.Health <= 0 then
             self.currentTarget = nil
-            return -- Se morto, cancela a mira e o tiro neste frame
+            return
         end
         
         local target = self:_getTarget()
@@ -1162,7 +1160,6 @@ function AimbotModule:enable()
             self.currentTarget = target
             self:_aimAt(target)
             
-            -- Lógica do Auto Shoot (só atira se o mouse NÃO estiver no painel)
             if self.autoShoot then
                 if not self:_isMouseOverUI() then
                     local targetChar = target.Character
@@ -1170,7 +1167,7 @@ function AimbotModule:enable()
                     
                     if targetHum and targetHum.Health > 0 then
                         local now = tick()
-                        if now - self.lastShootTime >= 0.05 then -- Atira a cada 0.05s (20 tiros/s)
+                        if now - self.lastShootTime >= 0.05 then
                             self.lastShootTime = now
                             local centerX = self.camera.ViewportSize.X / 2
                             local centerY = self.camera.ViewportSize.Y / 2
@@ -2610,15 +2607,13 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     fovShowBtnCorner.CornerRadius = UDim.new(0, 8)
     fovShowBtnCorner.Parent = fovShowBtn
 
-    local autoShootBtn = Instance.new("TextButton")
+    local autoShootBtn = Instance.new("ImageButton")
     autoShootBtn.Size = UDim2.new(0, 28, 0, 28)
     autoShootBtn.Position = UDim2.new(0, 95, 0.5, 4)
     autoShootBtn.BackgroundColor3 = theme.surface2
     autoShootBtn.BackgroundTransparency = 0.3
-    autoShootBtn.Text = "🔫"
-    autoShootBtn.TextColor3 = theme.textMuted
-    autoShootBtn.TextSize = 14
-    autoShootBtn.Font = Enum.Font.GothamBold
+    autoShootBtn.Image = "rbxthumb://type=Asset&id=124762326682646&w=150&h=150"
+    autoShootBtn.ImageColor3 = Color3.fromRGB(240, 240, 240)
     autoShootBtn.BorderSizePixel = 2
     autoShootBtn.BorderColor3 = theme.danger
     autoShootBtn.Parent = aimbotContent
@@ -3207,12 +3202,12 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         playClickSound()
         local isOn = aimbotModule:toggleAutoShoot()
         if isOn then
-            autoShootBtn.TextColor3 = theme.success
+            autoShootBtn.ImageColor3 = theme.success
             autoShootBtn.BackgroundColor3 = theme.success
             autoShootBtn.BackgroundTransparency = 0.85
             autoShootBtn.BorderColor3 = theme.success
         else
-            autoShootBtn.TextColor3 = theme.textMuted
+            autoShootBtn.ImageColor3 = Color3.fromRGB(240, 240, 240)
             autoShootBtn.BackgroundColor3 = theme.surface2
             autoShootBtn.BackgroundTransparency = 0.3
             autoShootBtn.BorderColor3 = theme.danger
@@ -3311,7 +3306,7 @@ local ok, err = pcall(function()
 end)
 
 if ok then
-    print("✅ Basic Settings Control v1.0.3 carregado!")
+    print("✅ Basic Settings Control v1.0.5 carregado!")
 else
     warn("❌ Erro ao criar UI: " .. tostring(err))
 end
