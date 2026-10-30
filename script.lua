@@ -1081,7 +1081,7 @@ function AimbotModule.new(config)
     self.onFOVChanged = nil
     self.autoShoot = false
     self.lastShootTime = 0
-    self.maxDistance = 1500
+    self.maxDistance = 2000
     return self
 end
 
