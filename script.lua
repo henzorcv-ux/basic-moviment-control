@@ -792,6 +792,20 @@ function AutoClickerModule:enable()
     if self.connection then self.connection:Disconnect() end
     self.connection = RunService.Heartbeat:Connect(function()
         if not self.isEnabled or not self.isClicking then return end
+        
+        -- Verifica se o mouse está sobre o painel para evitar cliques no UI
+        local gui = CoreGui:FindFirstChild("BasicSettingsControlGUI")
+        if gui then
+            local mainFrame = gui:FindFirstChild("MainFrame")
+            if mainFrame and mainFrame.Visible then
+                local pos = mainFrame.AbsolutePosition
+                local size = mainFrame.AbsoluteSize
+                if mouse.X >= pos.X and mouse.X <= pos.X + size.X and mouse.Y >= pos.Y and mouse.Y <= pos.Y + size.Y then
+                    return
+                end
+            end
+        end
+
         local mouseLoc = UIS:GetMouseLocation()
         pcall(function()
             VirtualInputManager:SendMouseButtonEvent(mouseLoc.X, mouseLoc.Y, 0, true, game, 1)
@@ -1067,6 +1081,7 @@ function AimbotModule.new(config)
     self.onFOVChanged = nil
     self.autoShoot = false
     self.lastShootTime = 0
+    self.maxDistance = 1500
     return self
 end
 
@@ -1089,6 +1104,10 @@ function AimbotModule:_getTarget()
     local maxDist = self.fov
     local bestTarget = nil
 
+    local localChar = player.Character
+    local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
+    local localPos = localRoot and localRoot.Position or camera.CFrame.Position
+
     for _, p in ipairs(Players:GetPlayers()) do
         if p == player then continue end
         local char = p.Character
@@ -1097,6 +1116,9 @@ function AimbotModule:_getTarget()
         if not humanoid or humanoid.Health <= 0 then continue end
         local part = char:FindFirstChild(self.targetPart)
         if not part then continue end
+
+        local distance3D = (localPos - part.Position).Magnitude
+        if distance3D > self.maxDistance then continue end
 
         local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
         if onScreen then
@@ -1120,15 +1142,16 @@ end
 function AimbotModule:_isMouseOverUI()
     local gui = CoreGui:FindFirstChild("BasicSettingsControlGUI")
     if not gui then return false end
-    local mainFrame = gui:FindFirstChild("Frame")
+    
+    local mainFrame = gui:FindFirstChild("MainFrame")
     if not mainFrame or not mainFrame.Visible then return false end
     
-    local mousePos = UIS:GetMouseLocation()
+    -- Usa mouse.X e mouse.Y em vez de UIS:GetMouseLocation() para bater exatamente com a posição do painel
     local pos = mainFrame.AbsolutePosition
     local size = mainFrame.AbsoluteSize
     
-    if mousePos.X >= pos.X and mousePos.X <= pos.X + size.X and
-       mousePos.Y >= pos.Y and mousePos.Y <= pos.Y + size.Y then
+    if mouse.X >= pos.X and mouse.X <= pos.X + size.X and
+       mouse.Y >= pos.Y and mouse.Y <= pos.Y + size.Y then
         return true
     end
     return false
@@ -1231,19 +1254,15 @@ function TPClickModule.new(config)
     return self
 end
 
-function TPClickModule:_isMouseOverUI(mousePos)
+function TPClickModule:_isMouseOverUI()
     local gui = CoreGui:FindFirstChild("BasicSettingsControlGUI")
     if not gui then return false end
-    for _, descendant in ipairs(gui:GetDescendants()) do
-        if descendant:IsA("GuiObject") and descendant.Visible then
-            local pos = descendant.AbsolutePosition
-            local size = descendant.AbsoluteSize
-            if mousePos.X >= pos.X and mousePos.X <= pos.X + size.X
-               and mousePos.Y >= pos.Y and mousePos.Y <= pos.Y + size.Y then
-                if descendant:IsA("TextButton") or descendant:IsA("ImageButton") then
-                    return true
-                end
-            end
+    local mainFrame = gui:FindFirstChild("MainFrame")
+    if mainFrame and mainFrame.Visible then
+        local pos = mainFrame.AbsolutePosition
+        local size = mainFrame.AbsoluteSize
+        if mouse.X >= pos.X and mouse.X <= pos.X + size.X and mouse.Y >= pos.Y and mouse.Y <= pos.Y + size.Y then
+            return true
         end
     end
     return false
@@ -1350,8 +1369,7 @@ function TPClickModule:enable()
         local humanoid = char:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid.Health <= 0 then return end
 
-        local mousePos = UIS:GetMouseLocation()
-        if self:_isMouseOverUI(mousePos) then return end
+        if self:_isMouseOverUI() then return end
 
         local pos = self:_getTargetPosition()
         if not pos then return end
@@ -1473,6 +1491,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     end
 
     local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
     mainFrame.Size = UDim2.new(0, 220, 0, 720)
     mainFrame.Position = UDim2.new(0.5, -110, 0, 40)
     mainFrame.BackgroundColor3 = theme.background
@@ -1513,6 +1532,7 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     end)
 
     local header = Instance.new("Frame")
+    header.Name = "Header"
     header.Size = UDim2.new(1, 0, 0, 52)
     header.BackgroundColor3 = theme.surface
     header.BackgroundTransparency = 0.5
@@ -2604,7 +2624,6 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
     fovShowBtnCorner.CornerRadius = UDim.new(0, 8)
     fovShowBtnCorner.Parent = fovShowBtn
 
-    -- Botão Auto Shoot com ImagemLabel no fundo
     local autoShootBtn = Instance.new("TextButton") 
     autoShootBtn.Size = UDim2.new(0, 110, 0, 32)
     autoShootBtn.Position = UDim2.new(0, 8, 0, 48) 
@@ -3219,13 +3238,11 @@ local function createUI(speedModule, jumpModule, espModule, noclipModule, autoPr
         if isOn then
             autoShootBtn.TextColor3 = theme.success
             autoShootBtn.BorderColor3 = theme.success
-            autoShootBtn.TextTransparency = 0 -- Garante a mesma opacidade
-            -- Não mexer na cor/transparência da imagem para não sobrepor o texto
+            autoShootBtn.TextTransparency = 0
         else
             autoShootBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
             autoShootBtn.BorderColor3 = theme.danger
             autoShootBtn.TextTransparency = 0
-            -- Não mexer na cor/transparência da imagem para não sobrepor o texto
         end
     end)
 
