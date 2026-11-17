@@ -2267,19 +2267,46 @@ do
 	})
 
 	-- rolagem com a roda do mouse menos sensível: cada "clique" da roda anda só SCROLL_STEP pixels
+	-- Rolagem da lista com a roda do mouse, suave e pouco sensível: cada "clique" da roda soma
+	-- SCROLL_STEP a um alvo, e a posição real do scroll desliza até esse alvo com um tween.
+	-- O limite é calculado com medidas fixas da própria lista (altura de cada nome, espaçamento e
+	-- margens), sem depender de AbsoluteCanvasSize/AbsoluteWindowSize, que misturam a escala do painel.
 	local SCROLL_STEP = 16
+	local ROW_H, ROW_GAP, LIST_PAD, LIST_H = 24, 4, 8, 100
 	listFrame.ScrollingEnabled = false
-	UIS.InputChanged:Connect(function(input)
+
+	local function maxScroll()
+		local n = 0
+		for _, b in pairs(entries) do
+			if b.Visible then n += 1 end
+		end
+		local content = n * ROW_H + math.max(0, n - 1) * ROW_GAP + LIST_PAD
+		return math.max(0, content - LIST_H)
+	end
+
+	local scrollTarget = 0
+	local scrollTween
+	local function scrollTo(y)
+		y = math.clamp(y, 0, maxScroll())
+		scrollTarget = y
+		if scrollTween then scrollTween:Cancel() end
+		scrollTween = tw(listFrame, 0.18, {CanvasPosition = Vector2.new(0, y)}, Enum.EasingStyle.Quad)
+	end
+
+	-- o evento vem do próprio Roblox (só dispara com o mouse sobre a lista ou sobre um nome dela),
+	-- então não há conta de posição do mouse que possa errar. SetInputSinkConsumed trava o evento
+	-- aqui, para a roda do mouse não chegar à câmera do jogo e mexer no zoom.
+	local function onWheel(input, processed)
 		if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
-		if Pager.current ~= 2 then return end -- a lista fica na página 2
-		local m = UIS:GetMouseLocation()
-		local p, sz = listFrame.AbsolutePosition, listFrame.AbsoluteSize
-		if m.X < p.X or m.X > p.X + sz.X or m.Y < p.Y or m.Y > p.Y + sz.Y then return end
-		local k = sz.Y / 100 -- escala do painel (a lista tem 100 px de altura "local")
-		local maxY = math.max(0, (listFrame.AbsoluteCanvasSize.Y - listFrame.AbsoluteWindowSize.Y) / k)
-		local y = math.clamp(listFrame.CanvasPosition.Y - input.Position.Z * SCROLL_STEP, 0, maxY)
-		listFrame.CanvasPosition = Vector2.new(0, y)
-	end)
+		scrollTo(scrollTarget - input.Position.Z * SCROLL_STEP)
+		pcall(function() UIS:SetInputSinkConsumed(input) end)
+	end
+	listFrame.InputChanged:Connect(onWheel)
+
+	-- quando a lista é filtrada pela pesquisa, o limite muda: mantém o alvo dentro do novo limite
+	local function clampScrollTarget()
+		scrollTo(scrollTarget)
+	end
 
 	listEmpty = label(c.frame, "Nenhum outro jogador no servidor", 9, UDim2.fromOffset(12, 112), UDim2.fromOffset(cardW - 24, 14), C.sub)
 
@@ -2306,6 +2333,7 @@ do
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		query = searchBox.Text:lower():match("^%s*(.-)%s*$")
 		refreshEmpty()
+		clampScrollTarget()
 	end)
 
 	local function flash(b, col)
@@ -2329,6 +2357,7 @@ do
 			if TPPlayer.enabled then tw(b, 0.15, {BackgroundColor3 = C.line}) end
 		end)
 		b.MouseLeave:Connect(function() tw(b, 0.2, {BackgroundColor3 = C.card1}) end)
+		b.InputChanged:Connect(onWheel)
 		b.MouseButton1Click:Connect(function()
 			if TPPlayer.teleportTo(plr) then
 				flash(b, C.on)   -- teleportou
@@ -2341,6 +2370,7 @@ do
 		end)
 		entries[plr] = b
 		refreshEmpty()
+		clampScrollTarget()
 	end
 
 	local function removePlayer(plr)
@@ -2348,6 +2378,7 @@ do
 		if b then b:Destroy() end
 		entries[plr] = nil
 		refreshEmpty()
+		clampScrollTarget()
 	end
 
 	for _, plr in ipairs(Players:GetPlayers()) do addPlayer(plr) end
