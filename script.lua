@@ -10,8 +10,6 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- Onde colocar o painel: um container que fica ACIMA de tudo, inclusive do menu do Roblox
--- (respawnar / sair / voltar). gethui() ou CoreGui estão disponíveis nos executores.
--- Se não der, usa o PlayerGui (aí o menu do Roblox ainda pode ficar por cima).
 local parent = playerGui
 do
 	local ok, container = pcall(function()
@@ -165,7 +163,6 @@ local function tw(o, t, props, style, dir)
 	return tween
 end
 
--- Animação suave dos números: sobe de leve e volta devagar
 local function softPop(sc, amount)
 	local tok = (sc:GetAttribute("tok") or 0) + 1
 	sc:SetAttribute("tok", tok)
@@ -186,7 +183,6 @@ local function label(p, text, size, pos, sz, color, bold, align)
 	})
 end
 
--- Listas animadas
 local rainbows, bars, pulseStrokes, activeDots = {}, {}, {}, {}
 
 local function addRainbow(grad, phase)
@@ -196,7 +192,6 @@ end
 ------------------------------------------------------------
 -- Janela principal
 ------------------------------------------------------------
--- DisplayOrder no máximo: o painel fica sobre qualquer outra interface
 local gui = new("ScreenGui", {
 	Name = "BasicSettingsControl", ResetOnSpawn = false, IgnoreGuiInset = true,
 	DisplayOrder = 2147483647, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -207,13 +202,12 @@ do
 end
 
 local viewH = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.Y or 800
-local H = 800 -- ajustado automaticamente no final
+local H = 800
 
-local RADIUS = 28 -- raio dos cantos do painel
+local RADIUS = 28
 
--- Moldura: fundo, cantos redondos e borda neon
 local main = new("Frame", {
-	Parent = gui, Size = UDim2.fromOffset(W, H), AnchorPoint = Vector2.new(0, 0), -- âncora no topo
+	Parent = gui, Size = UDim2.fromOffset(W, H), AnchorPoint = Vector2.new(0, 0),
 	Position = UDim2.fromOffset(40, 40),
 	BackgroundColor3 = C.bg1, BackgroundTransparency = 1, BorderSizePixel = 0,
 }, {
@@ -222,13 +216,11 @@ local main = new("Frame", {
 })
 local mainScale = new("UIScale", {Parent = main, Scale = 0.7})
 
--- Borda neon animada (começa invisível e aparece na entrada)
 local mainStroke = stroke(Color3.new(1, 1, 1), 2, 1)
 mainStroke.Parent = main
 local mainStrokeGrad = new("UIGradient", {Parent = mainStroke})
 addRainbow(mainStrokeGrad, 0)
 
--- Conteúdo (permite o fade de tudo junto e recorta nas pontas redondas)
 local content = new("CanvasGroup", {
 	Parent = main, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
 	BorderSizePixel = 0, GroupTransparency = 1,
@@ -240,10 +232,9 @@ local content = new("CanvasGroup", {
 local header = new("Frame", {
 	Parent = content, Size = UDim2.new(1, 0, 0, 56), BackgroundColor3 = C.header, BorderSizePixel = 0, ZIndex = 3,
 }, {
-	corner(RADIUS), -- pontas de cima redondas
+	corner(RADIUS),
 	new("UIGradient", {Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(42, 42, 56), C.header)}),
 })
--- preenchimento para manter a parte de baixo do header reta
 local headerFill = new("Frame", {
 	Parent = header, Position = UDim2.new(0, 0, 1, -RADIUS), Size = UDim2.new(1, 0, 0, RADIUS),
 	BackgroundColor3 = C.header, BorderSizePixel = 0, ZIndex = 1,
@@ -279,14 +270,12 @@ end
 hoverBtn(minBtn, C.card1)
 hoverBtn(closeBtn, C.off)
 
--- Linha rainbow animada no header
 local hLine = new("Frame", {
 	Parent = header, Position = UDim2.new(0, 0, 1, -2), Size = UDim2.new(1, 0, 0, 2),
 	BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 4,
 })
 addRainbow(new("UIGradient", {Parent = hLine}), 0.3)
 
--- Arrastar
 do
 	local dragging, dragStart, startPos
 	header.InputBegan:Connect(function(i)
@@ -306,10 +295,8 @@ do
 end
 
 ------------------------------------------------------------
--- Área rolável
+-- Área rolável (Páginas 1, 2 e 3)
 ------------------------------------------------------------
--- Recipiente das páginas: um ScrollingFrame (sem rolagem) recorta tudo que sair do retângulo,
--- então a animação de troca de página fica sempre dentro dos limites do painel
 local pageHost = new("ScrollingFrame", {
 	Parent = content, Position = UDim2.fromOffset(0, 58), Size = UDim2.new(1, 0, 1, -58),
 	BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true,
@@ -326,20 +313,28 @@ local scroll = new("ScrollingFrame", {
 local cursor = 10
 local cardList = {}
 
--- Página 2 (mesma área, escondida até clicar na seta ›)
+-- Página 2
 local scroll2 = new("ScrollingFrame", {
+	Parent = pageHost, Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(W, 700),
+	BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 0,
+	ScrollingEnabled = false, ScrollBarImageColor3 = C.line, CanvasSize = UDim2.new(),
+	ScrollingDirection = Enum.ScrollingDirection.Y,
+	Visible = false,
+})
+local page2 = {scroll = scroll2, cursor = 10, list = {}}
+
+-- Página 3
+local scroll3 = new("ScrollingFrame", {
 	Parent = pageHost, Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(W, 700),
 	BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
 	ScrollBarImageColor3 = C.line, CanvasSize = UDim2.new(), ScrollingDirection = Enum.ScrollingDirection.Y,
 	Visible = false,
 })
-local page2 = {scroll = scroll2, cursor = 10, list = {}}
-local pages = {scroll, scroll2}
-local pageLists = {cardList, page2.list}
+local page3 = {scroll = scroll3, cursor = 10, list = {}}
 
--- Cor do "véu" que cobre os cards durante a animação (igual ao fundo do painel).
--- Os cards são Frames comuns (CanvasGroups aninhados ficavam escuros quando o painel está acima
--- do menu do Roblox); o fade é feito por um véu que some/aparece por cima do card.
+local pages = {scroll, scroll2, scroll3}
+local pageLists = {cardList, page2.list, page3.list}
+
 local VEIL_COLOR = Color3.fromRGB(2, 2, 3)
 
 local function card(h, accent, title, icon, pg)
@@ -440,6 +435,24 @@ local function valueBox(c, x, y, w, h, text, color, size)
 	end
 end
 
+local function textInput(c, x, y, w, h, defaultText, placeholder, align)
+	local tb = new("TextBox", {
+		Parent = c.frame, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h),
+		BackgroundColor3 = C.bg2, Text = defaultText, PlaceholderText = placeholder,
+		PlaceholderColor3 = C.sub, TextColor3 = C.pink, TextSize = 11,
+		Font = Enum.Font.GothamBold, TextXAlignment = align or Enum.TextXAlignment.Center,
+		ClearTextOnFocus = false, BorderSizePixel = 0,
+	}, {
+		corner(8),
+		new("UIPadding", {PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4)}),
+	})
+	local st = stroke(C.line, 1, 0.4)
+	st.Parent = tb
+	tb.Focused:Connect(function() tw(st, 0.2, {Color = C.pink, Transparency = 0.1}) end)
+	tb.FocusLost:Connect(function() tw(st, 0.2, {Color = C.line, Transparency = 0.4}) end)
+	return tb
+end
+
 local function slider(c, y, minV, maxV, startV, cb)
 	local f = c.frame
 	label(f, tostring(minV), 8, UDim2.fromOffset(8, y - 5), UDim2.fromOffset(26, 12), C.sub, false, Enum.TextXAlignment.Left)
@@ -497,6 +510,8 @@ local function slider(c, y, minV, maxV, startV, cb)
 			update(i.Position.X)
 		end
 	end)
+
+	return setValue
 end
 
 local function hint(c, text, y)
@@ -504,23 +519,18 @@ local function hint(c, text, y)
 end
 
 ------------------------------------------------------------
--- Paginação (1/2, 2/2)
+-- Paginação (1/3, 2/3, 3/3)
 ------------------------------------------------------------
-local PAGE_COUNT = 2
+local PAGE_COUNT = 3
 local Pager = {current = 1, busy = false, widgets = {}}
 
--- Os cards NUNCA se movem mais que SLIDE pixels para os lados. O painel tem 14 px de margem
--- em cada lado, então nada passa da borda (e o contorno de 1 px também não é cortado).
 local SLIDE = 12
-local Anim = {untilT = 0} -- até quando há animação de página em andamento
+local Anim = {untilT = 0}
 
--- entrada em cascata dos cards de uma página (devolve o tempo total, em segundos)
--- dirX (opcional, 1 ou -1): entram deslizando de lado; sem ele, sobem um pouco (entrada inicial)
 local function playEntrance(list, dirX, startDelay)
 	startDelay = startDelay or 0.05
 	local total = 0
 	for i, item in ipairs(list) do
-		-- estado inicial: card coberto pelo véu (invisível); o contorno é animado junto
 		item.veil.BackgroundTransparency = 0
 		item.stroke.Transparency = 1
 		if dirX then
@@ -529,17 +539,17 @@ local function playEntrance(list, dirX, startDelay)
 			item.cg.Position = UDim2.fromOffset(item.final.X.Offset, item.final.Y.Offset + 14)
 		end
 
-		local d = startDelay + i * 0.06
-		total = math.max(total, d + 0.5)
+		local d = startDelay + i * 0.04
+		total = math.max(total, d + 0.35)
 		task.delay(d, function()
 			if item.cg.Parent then
-				tw(item.cg, 0.5, {Position = item.final}, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-				tw(item.veil, 0.5, {BackgroundTransparency = 1}, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-				tw(item.stroke, 0.5, {Transparency = 0.5}, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+				tw(item.cg, 0.35, {Position = item.final}, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+				tw(item.veil, 0.35, {BackgroundTransparency = 1}, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+				tw(item.stroke, 0.35, {Transparency = 0.5}, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 			end
 		end)
 	end
-	Anim.untilT = math.max(Anim.untilT, os.clock() + total + 0.3)
+	Anim.untilT = math.max(Anim.untilT, os.clock() + total + 0.15)
 	return total
 end
 
@@ -568,36 +578,32 @@ function Pager.go(n)
 	Pager.current = n
 	refreshNav()
 
-	-- 1) os cards da página atual saem em cascata, deslizando um pouco e sumindo (com o contorno)
 	local outList = pageLists[oldIdx]
 	local outTotal = 0
 	for i, item in ipairs(outList) do
-		local d = (i - 1) * 0.04
-		outTotal = math.max(outTotal, d + 0.3)
+		local d = (i - 1) * 0.025
+		outTotal = math.max(outTotal, d + 0.22)
 		task.delay(d, function()
 			if item.cg.Parent then
-				tw(item.cg, 0.3, {
+				tw(item.cg, 0.22, {
 					Position = UDim2.fromOffset(item.final.X.Offset - dir * SLIDE, item.final.Y.Offset),
 				}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-				tw(item.veil, 0.3, {BackgroundTransparency = 0}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-				tw(item.stroke, 0.3, {Transparency = 1}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+				tw(item.veil, 0.22, {BackgroundTransparency = 0}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+				tw(item.stroke, 0.22, {Transparency = 1}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 			end
 		end)
 	end
 
-	Anim.untilT = os.clock() + outTotal + 2
+	Anim.untilT = os.clock() + outTotal + 0.6
 
-	-- 2) só depois que a saída terminou, a nova página aparece e seus cards entram em cascata
-	task.delay(outTotal + 0.03, function()
+	task.delay(outTotal + 0.02, function()
 		old.Visible = false
 		new.Visible = true
 		local total = playEntrance(pageLists[n], dir, 0)
-		-- libera novos cliques só quando a entrada terminou por completo
 		task.delay(total, function() Pager.busy = false end)
 	end)
 end
 
--- seletor "‹ 1/2 ›" no canto superior direito do primeiro card de cada página
 local function navWidget(c)
 	local pill = new("Frame", {
 		Parent = c.frame, Position = UDim2.fromOffset(136, 8), Size = UDim2.fromOffset(62, 24),
@@ -626,10 +632,10 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: VELOCIDADE
--- A velocidade só é aplicada quando o botão está ON.
--- Ao desligar (ou fechar o painel), volta à velocidade original.
 ------------------------------------------------------------
-local Speed = {enabled = false, value = 25, original = 16}
+local AntiHit = {enabled = false}
+local Force = {enabled = false}
+local Speed = {enabled = false, value = 25, original = 16, flying = false}
 do
 	local function getHumanoid()
 		local ch = player.Character
@@ -641,7 +647,6 @@ do
 		if h then h.WalkSpeed = Speed.value end
 	end
 
-	-- chamado a cada frame: mantém a velocidade caso o jogo tente alterá-la
 	function Speed.enforce()
 		if not Speed.enabled then return end
 		local h = getHumanoid()
@@ -663,6 +668,8 @@ do
 			Speed.enabled = false
 			Speed.restore()
 		end
+		AntiHit.setEnabled(on)
+		Force.setEnabled(on)
 	end
 
 	function Speed.setValue(v)
@@ -671,6 +678,8 @@ do
 	end
 
 	function Speed.shutdown()
+		AntiHit.setEnabled(false)
+		Force.setEnabled(false)
 		if Speed.charConn then Speed.charConn:Disconnect() end
 		if Speed.enabled then
 			Speed.enabled = false
@@ -678,7 +687,6 @@ do
 		end
 	end
 
-	-- ao renascer, reaplica se estiver ligado
 	Speed.charConn = player.CharacterAdded:Connect(function(ch)
 		local h = ch:WaitForChild("Humanoid", 10)
 		if h then
@@ -689,14 +697,149 @@ do
 end
 
 ------------------------------------------------------------
+-- LÓGICA: ANTI-RAGDOLL + ANTI-STUN + FORÇA
+------------------------------------------------------------
+do
+	local function getParts()
+		local ch = player.Character
+		if not ch then return end
+		return ch, ch:FindFirstChildOfClass("Humanoid"), ch:FindFirstChild("HumanoidRootPart")
+	end
+
+	local BLOCKED_STATES = {
+		Enum.HumanoidStateType.Ragdoll,
+		Enum.HumanoidStateType.FallingDown,
+		Enum.HumanoidStateType.Physics,
+	}
+	local joints = setmetatable({}, {__mode = "k"})
+	local lastHum
+	local origJumpPower, origJumpHeight = 50, 7.2
+	local lastScan = 0
+
+	local function snapshot(ch)
+		for _, d in ipairs(ch:GetDescendants()) do
+			if d:IsA("Motor6D") and d.Part0 and d.Part1 and not joints[d] then
+				joints[d] = {d.Part0, d.Part1}
+			end
+		end
+	end
+
+	local function isFlagName(name)
+		name = name:lower()
+		return name:find("stun", 1, true) ~= nil or name:find("ragdoll", 1, true) ~= nil
+	end
+
+	function AntiHit.setEnabled(on)
+		AntiHit.enabled = on
+		lastHum = nil
+		if not on then
+			local _, hum = getParts()
+			if hum then
+				for _, st in ipairs(BLOCKED_STATES) do hum:SetStateEnabled(st, true) end
+			end
+		end
+	end
+
+	function AntiHit.update()
+		if not AntiHit.enabled then return end
+		local ch, hum, root = getParts()
+		if not hum or not root or hum.Health <= 0 then return end
+
+		if hum ~= lastHum then
+			lastHum = hum
+			joints = setmetatable({}, {__mode = "k"})
+			snapshot(ch)
+			if hum.JumpPower > 0 then origJumpPower = hum.JumpPower end
+			if hum.JumpHeight > 0 then origJumpHeight = hum.JumpHeight end
+		end
+
+		for _, st in ipairs(BLOCKED_STATES) do
+			if hum:GetStateEnabled(st) then hum:SetStateEnabled(st, false) end
+		end
+		local state = hum:GetState()
+		if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown
+			or state == Enum.HumanoidStateType.Physics then
+			hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+		if not Speed.flying and hum.PlatformStand then hum.PlatformStand = false end
+		for m, info in pairs(joints) do
+			if m.Parent then
+				if m.Part0 ~= info[1] then m.Part0 = info[1] end
+				if m.Part1 ~= info[2] then m.Part1 = info[2] end
+			end
+		end
+
+		if not hum.AutoRotate then hum.AutoRotate = true end
+		if root.Anchored then root.Anchored = false end
+		if hum.UseJumpPower then
+			if hum.JumpPower <= 0 then hum.JumpPower = origJumpPower end
+		elseif hum.JumpHeight <= 0 then
+			hum.JumpHeight = origJumpHeight
+		end
+
+		local now = os.clock()
+		if now - lastScan < 0.25 then return end
+		lastScan = now
+		for _, d in ipairs(ch:GetDescendants()) do
+			if d:IsA("BallSocketConstraint") then
+				d:Destroy()
+			elseif d:IsA("BoolValue") and d.Value and isFlagName(d.Name) then
+				d.Value = false
+			end
+		end
+		for _, holder in ipairs({ch, hum}) do
+			for name, v in pairs(holder:GetAttributes()) do
+				if v == true and isFlagName(name) then holder:SetAttribute(name, false) end
+			end
+		end
+	end
+
+	local FORCE = 1e15
+	local bv
+
+	local function removeBV()
+		if bv then bv:Destroy(); bv = nil end
+	end
+
+	function Force.setEnabled(on)
+		Force.enabled = on
+		if not on then removeBV() end
+	end
+
+	function Force.update()
+		if not Force.enabled or Fling.enabled then return end
+		local _, hum, root = getParts()
+		if not hum or not root or hum.Health <= 0 or Speed.flying then
+			removeBV()
+			return
+		end
+
+		if not bv or bv.Parent ~= root then
+			removeBV()
+			bv = Instance.new("BodyVelocity")
+			bv.Name = "BSC_Force"
+			bv.P = 1e6
+			bv.MaxForce = Vector3.zero
+			bv.Velocity = Vector3.zero
+			bv.Parent = root
+		end
+
+		local md = hum.MoveDirection
+		if md.Magnitude > 0.01 then
+			bv.MaxForce = Vector3.new(FORCE, 0, FORCE)
+			bv.Velocity = Vector3.new(md.X, 0, md.Z) * hum.WalkSpeed
+		else
+			bv.MaxForce = Vector3.zero
+		end
+	end
+end
+
+------------------------------------------------------------
 -- LÓGICA: PULO INFINITO
--- Com o botão ON, o personagem pula no ar quantas vezes quiser:
---  • apertando a tecla de pulo várias vezes, ou
---  • segurando a tecla de pulo (pula de novo continuamente).
 ------------------------------------------------------------
 local InfJump = {enabled = false, last = 0}
 do
-	local TAP_COOLDOWN = 0.05  -- evita disparo duplo no mesmo aperto (só nos toques)
+	local TAP_COOLDOWN = 0.05
 
 	local function getParts()
 		local ch = player.Character
@@ -714,7 +857,6 @@ do
 	local function airJump()
 		local hum, root = getParts()
 		if not hum or not root or hum.Health <= 0 or hum.Sit then return end
-		-- no chão, deixa o pulo normal do jogo agir
 		if hum.FloorMaterial ~= Enum.Material.Air then return end
 
 		InfJump.last = os.clock()
@@ -727,19 +869,16 @@ do
 		InfJump.enabled = on
 	end
 
-	-- chamado a cada frame: enquanto a tecla de pulo estiver segurada,
-	-- o personagem pula continuamente (sem intervalo entre os pulos)
 	function InfJump.update()
 		if not InfJump.enabled or InfJump.suspended then return end
 		if UIS:GetFocusedTextBox() then return end
 
 		local hum = getParts()
 		if not hum then return end
-		local holding = UIS:IsKeyDown(Enum.KeyCode.Space) or hum.Jump -- Space (PC) ou botão de pulo (mobile)
+		local holding = UIS:IsKeyDown(Enum.KeyCode.Space) or hum.Jump
 		if holding then airJump() end
 	end
 
-	-- cada aperto da tecla de pulo
 	InfJump.conn = UIS.JumpRequest:Connect(function()
 		if not InfJump.enabled or InfJump.suspended then return end
 		if os.clock() - InfJump.last < TAP_COOLDOWN then return end
@@ -754,15 +893,12 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: ESP
--- Chams (Highlight) nos outros jogadores + nome e distância acima da cabeça.
--- O tamanho do texto muda com a distância: perto = maior, longe = menor
--- (nunca some e nunca fica gigante).
 ------------------------------------------------------------
 local ESP = {enabled = false, entries = {}, conns = {}}
 do
-	local MIN_SIZE = 7    -- tamanho do nome bem longe (pequeno, mas continua visível)
-	local MAX_SIZE = 16   -- tamanho do nome bem perto (menor que antes, nunca gigante)
-	local FAR = 250       -- distância (studs) a partir da qual usa o tamanho mínimo
+	local MIN_SIZE = 7
+	local MAX_SIZE = 16
+	local FAR = 250
 
 	local folder = new("Folder", {Name = "ESP", Parent = gui})
 
@@ -781,13 +917,12 @@ do
 		ESP.entries[plr] = nil
 	end
 
-	local building = {} -- jogadores cuja chams está sendo criada agora (evita criar duas vezes)
+	local building = {}
 
 	local function buildNow(plr, char)
 		local head = char:WaitForChild("Head", 5)
 		local root = char:WaitForChild("HumanoidRootPart", 5)
 
-		-- ao renascer, o personagem pode ainda não estar no workspace: espera ele entrar
 		local waited = 0
 		while not char:IsDescendantOf(workspace) and waited < 5 and plr.Character == char do
 			task.wait(0.1)
@@ -868,8 +1003,6 @@ do
 		end
 	end
 
-	-- a cada frame confere se a chams e o nome de cada jogador ainda existem
-	-- (ao renascer, às vezes só o nome aparecia): recria o que estiver faltando
 	local function reconcile()
 		for plr in pairs(ESP.conns) do
 			local ch = plr.Character
@@ -878,7 +1011,6 @@ do
 				if not e or e.char ~= ch or not e.highlight.Parent or not e.tag.Parent or not e.root.Parent then
 					task.spawn(build, plr, ch)
 				else
-					-- reforça a chams: reaplica tudo que possa ter sido alterado
 					local hl = e.highlight
 					if hl.Parent ~= ch then hl.Parent = ch end
 					if hl.Adornee ~= ch then hl.Adornee = ch end
@@ -893,16 +1025,14 @@ do
 		end
 	end
 
-	-- também confere antes de cada quadro ser desenhado (o mais rápido possível no Roblox: 1x por frame)
 	ESP.renderConn = RS.RenderStepped:Connect(function()
 		if ESP.enabled then pcall(reconcile) end
 	end)
 
-	-- chamado a cada frame: atualiza tamanho do nome e distância
 	function ESP.update()
 		if not ESP.enabled then return end
 
-		reconcile() -- confere TODO frame
+		reconcile()
 
 		local ch = player.Character
 		local myRoot = ch and ch:FindFirstChild("HumanoidRootPart")
@@ -913,7 +1043,6 @@ do
 		for _, e in pairs(ESP.entries) do
 			if e.root.Parent then
 				local dist = (e.root.Position - origin).Magnitude
-				-- varia de forma proporcional à distância: perto = maior, longe = menor
 				local t = math.clamp(dist / FAR, 0, 1)
 				local s = math.floor(MIN_SIZE + (MAX_SIZE - MIN_SIZE) * (1 - t) + 0.5)
 				if s ~= e.size then
@@ -934,27 +1063,17 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: NOCLIP
--- O personagem atravessa paredes, tetos e objetos.
--- Para não afundar no chão, o script mede a superfície embaixo do personagem:
---  • chão e superfícies com topo até a metade do corpo (degraus, blocos baixos):
---    o personagem é empurrado suavemente para cima delas;
---  • superfícies mais altas que isso são atravessadas;
---  • dentro de paredes/tetos só o chão segura o personagem (não sobe pelas divisas internas);
---  • pisos/plataformas LARGAS que cortam o corpo (ex.: piso da casa mais alto que o chão de fora)
---    também levam o personagem para cima, como numa escada.
 ------------------------------------------------------------
 local Noclip = {enabled = false, grounded = false, hum = nil, lastGroundY = nil, lastGroundTime = 0}
 Noclip.changed = setmetatable({}, {__mode = "k"})
 do
-	local RISE_SPEED = 30 -- velocidade (studs/s) com que sobe para cima do relevo
-	local SNAP = 0.3      -- tolerância para "colar" no chão
-	local STEP_FRACTION = 0.85 -- altura máxima do degrau, como fração da altura até o centro do corpo
-	                           -- (≈ metade do personagem). Acima disso a superfície é atravessada.
-	local BIG_FRACTION = 1.5 -- altura máxima (fração de 'stand') de um PISO/PLATAFORMA larga que ele sobe
-	local WIDE_R = 2.5       -- distância usada para medir se a superfície é larga como um piso
-	local RAISE = 2.5     -- os raios partem um pouco ACIMA do centro do corpo, para enxergar
-	                      -- a superfície mesmo quando o corpo já afundou nela
-	local OFFSETS = {     -- vários raios para detectar o relevo um pouco antes
+	local RISE_SPEED = 30
+	local SNAP = 0.3
+	local STEP_FRACTION = 0.85
+	local BIG_FRACTION = 1.5
+	local WIDE_R = 2.5
+	local RAISE = 2.5
+	local OFFSETS = {
 		Vector3.new(0, 0, 0),
 		Vector3.new(0.8, 0, 0), Vector3.new(-0.8, 0, 0),
 		Vector3.new(0, 0, 0.8), Vector3.new(0, 0, -0.8),
@@ -970,20 +1089,11 @@ do
 	overlap.RespectCanCollide = true
 	overlap.MaxParts = 1
 
-	-- true se o ponto está DENTRO de um objeto sólido (ex.: no meio de uma parede)
 	local function isInsideSolid(point, char)
 		overlap.FilterDescendantsInstances = {char}
 		return #workspace:GetPartBoundsInRadius(point, 0.1, overlap) > 0
 	end
 
-	-- Procura a superfície de apoio embaixo de um ponto (raio para baixo).
-	--  • Ponto no ar livre (chão, degraus, blocos baixos): vale a primeira superfície
-	--    cujo topo esteja até a metade do corpo. Superfícies mais altas são atravessadas.
-	--  • Ponto DENTRO de um objeto (parede, teto): só vale o chão na altura dos pés.
-	--    As divisas internas da parede (ex.: tábuas empilhadas) são ignoradas,
-	--    então o personagem não é empurrado para cima dentro da parede.
-	-- A superfície é larga (piso/plataforma) se continua na mesma altura nos DOIS eixos.
-	-- O topo de uma parede ou pilar é estreito e não passa neste teste.
 	local WIDE_DIRS = {
 		Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0),
 		Vector3.new(0, 0, 1), Vector3.new(0, 0, -1),
@@ -1010,18 +1120,16 @@ do
 			if not res then return nil end
 
 			local y = res.Position.Y
-			if y <= ref + SNAP then return y end              -- chão / apoio nos pés
-			if res.Instance:IsA("Terrain") then return y end  -- terreno
+			if y <= ref + SNAP then return y end
+			if res.Instance:IsA("Terrain") then return y end
 			if not restricted then
-				if y <= maxTop then return y end                  -- degrau/relevo baixo
-				-- piso/plataforma larga que está cortando o corpo (ex.: piso de uma casa
-				-- mais alto que o chão de fora): sobe nele como numa escada
+				if y <= maxTop then return y end
 				if y <= bigTop and y <= rootY + 2.2 and isWide(origin, y, reach, char) then
 					return y
 				end
 			end
 			table.insert(ignore, res.Instance)
-			restricted = true -- já atravessamos um objeto: o que vem abaixo está dentro dele
+			restricted = true
 		end
 		return nil
 	end
@@ -1032,7 +1140,6 @@ do
 		return ch:FindFirstChildOfClass("Humanoid"), ch:FindFirstChild("HumanoidRootPart")
 	end
 
-	-- distância do centro do corpo (HumanoidRootPart) até os pés
 	local function standHeight(hum, root, char)
 		local legs = 0
 		if hum.RigType == Enum.HumanoidRigType.R6 then
@@ -1049,8 +1156,6 @@ do
 		return math.sqrt(2 * workspace.Gravity * hum.JumpHeight)
 	end
 
-	-- enquanto "no chão" (sobre a superfície detectada), desliga o estado de queda
-	-- para o personagem não ficar com a animação de cair andando no chão
 	local function setGrounded(g, hum)
 		if g == Noclip.grounded then return end
 		Noclip.grounded = g
@@ -1075,14 +1180,13 @@ do
 		end
 	end
 
-	-- roda antes da física, a cada frame
 	local function step(dt)
 		local hum, root = getParts()
 		if not hum or not root or hum.Health <= 0 then
 			Noclip.grounded = false
 			return
 		end
-		if hum ~= Noclip.hum then -- novo personagem (renasceu)
+		if hum ~= Noclip.hum then
 			Noclip.hum = hum
 			Noclip.grounded = false
 			Noclip.lastGroundY = nil
@@ -1090,7 +1194,7 @@ do
 
 		local char = hum.Parent
 		disableCollisions(char)
-		if Noclip.suspendGround then -- voando: o Fly controla o movimento vertical
+		if Noclip.suspendGround then
 			setGrounded(false, hum)
 			return
 		end
@@ -1100,18 +1204,15 @@ do
 		local pos = root.Position
 		local vel = root.AssemblyLinearVelocity
 		local reach = stand + 1.5 + RAISE + math.max(0, -vel.Y) * dt * 2
-		local feetY = pos.Y - stand                    -- altura dos pés
+		local feetY = pos.Y - stand
 
-		-- altura de referência do chão: se o corpo afundou numa superfície, usa a altura
-		-- do último apoio (assim o chão que está "cortando" o corpo volta a ser enxergado)
 		local ref = feetY
 		if Noclip.lastGroundY and os.clock() - Noclip.lastGroundTime < 2 then
 			ref = math.max(feetY, Noclip.lastGroundY)
 		end
-		local maxTop = ref + stand * STEP_FRACTION     -- topo mais alto que vale como degrau
-		local bigTop = ref + stand * BIG_FRACTION      -- topo mais alto que vale para pisos largos
+		local maxTop = ref + stand * STEP_FRACTION
+		local bigTop = ref + stand * BIG_FRACTION
 
-		-- superfície de apoio mais alta embaixo do corpo
 		local best
 		for _, off in ipairs(OFFSETS) do
 			local y = findSurface(pos + off + Vector3.new(0, RAISE, 0), reach, char, ref, maxTop, bigTop, pos.Y)
@@ -1120,10 +1221,9 @@ do
 
 		local grounded = false
 		if best then
-			local desired = best + stand -- altura do centro do corpo em pé sobre a superfície
+			local desired = best + stand
 			local y = pos.Y
 			if y < desired - 0.05 then
-				-- corpo afundado na superfície: empurra suavemente para cima
 				local dy = math.min(desired - y, RISE_SPEED * dt)
 				root.CFrame = root.CFrame + Vector3.new(0, dy, 0)
 				if vel.Y < 0 then
@@ -1131,7 +1231,6 @@ do
 				end
 				grounded = true
 			elseif y <= desired + SNAP and vel.Y <= 0.5 then
-				-- apoiado na superfície
 				root.CFrame = root.CFrame + Vector3.new(0, desired - y, 0)
 				root.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z)
 				grounded = true
@@ -1143,7 +1242,6 @@ do
 			Noclip.lastGroundTime = os.clock()
 		end
 
-		-- pulo normal (apertando ou segurando) quando apoiado
 		if grounded and not UIS:GetFocusedTextBox()
 			and (UIS:IsKeyDown(Enum.KeyCode.Space) or hum.Jump) then
 			jump(hum, root)
@@ -1165,7 +1263,6 @@ do
 			if Noclip.stepConn then Noclip.stepConn:Disconnect(); Noclip.stepConn = nil end
 			if Noclip.jumpConn then Noclip.jumpConn:Disconnect(); Noclip.jumpConn = nil end
 
-			-- devolve a colisão ao personagem
 			for p in pairs(Noclip.changed) do
 				if p.Parent then p.CanCollide = true end
 				Noclip.changed[p] = nil
@@ -1184,27 +1281,177 @@ do
 end
 
 ------------------------------------------------------------
--- VELOCIDADE
+-- LÓGICA: FLING (PUNCH)
 ------------------------------------------------------------
+local Fling = {enabled = false, power = 1000000, x = 0, y = 1, z = 0, punch = false, noclip = false, conn = nil, anim = nil}
 do
-	local c = card(142, C.blue, "VELOCIDADE", "⚡")
+	local function getRoot(char)
+		if not char then return nil end
+		return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+	end
 
-	-- navegação entre páginas (‹ 1/2 ›)
-	navWidget(c)
+	local function disCol(char, state)
+		if not char then return end
+		for _, p in pairs(char:GetChildren()) do
+			if p:IsA("BasePart") then
+				p.CanCollide = state
+			end
+		end
+	end
 
-	local setBox = valueBox(c, 12, 42, cardW - 24, 38, "25", C.blue, 22)
-	slider(c, 96, 5, 500, 25, function(v)
-		setBox(tostring(v))
-		Speed.setValue(v)
+	local function getVel()
+		local dir = Vector3.new(Fling.x, Fling.y, Fling.z)
+		if dir.Magnitude > 0 then dir = dir.Unit end
+		return dir * Fling.power
+	end
+
+	local function playAnim()
+		local char = player.Character
+		if not char then return end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if not hum then return end
+		local animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
+
+		local isR15 = char:FindFirstChild("UpperTorso") ~= nil
+		local id = isR15 and "rbxassetid://94235564114426" or "rbxassetid://204062532"
+
+		if Fling.anim then
+			Fling.anim:Stop()
+			Fling.anim:Destroy()
+		end
+
+		local a = Instance.new("Animation")
+		a.AnimationId = id
+		Fling.anim = animator:LoadAnimation(a)
+		Fling.anim.Looped = true
+		Fling.anim:Play()
+	end
+
+	local function stopAnim()
+		if Fling.anim then
+			Fling.anim:Stop()
+			Fling.anim:Destroy()
+			Fling.anim = nil
+		end
+	end
+
+	RS.Stepped:Connect(function()
+		if Fling.enabled and Fling.noclip and player.Character then
+			disCol(player.Character, false)
+		end
 	end)
-	toggle(c, 30, 108, cardW - 60, 26, function(on)
-		Speed.setEnabled(on)
+
+	function Fling.start()
+		if Fling.conn then return end
+		Fling.enabled = true
+		if Fling.punch then playAnim() end
+
+		local ml = 0.1
+		Fling.conn = RS.Heartbeat:Connect(function()
+			local char = player.Character
+			local root = getRoot(char)
+			if not (char and char.Parent and root and root.Parent) then return end
+
+			local lv = root.AssemblyLinearVelocity
+			local fv = getVel()
+
+			root.AssemblyLinearVelocity = fv
+			RS.RenderStepped:Wait()
+
+			if char and char.Parent and root and root.Parent then
+				root.AssemblyLinearVelocity = lv
+			end
+			RS.Stepped:Wait()
+			if char and char.Parent and root and root.Parent then
+				root.AssemblyLinearVelocity = lv + Vector3.new(0, ml, 0)
+				ml = ml * -1
+			end
+		end)
+	end
+
+	function Fling.stop()
+		if Fling.conn then
+			Fling.conn:Disconnect()
+			Fling.conn = nil
+		end
+		Fling.enabled = false
+		stopAnim()
+		if player.Character and Fling.noclip then
+			disCol(player.Character, true)
+		end
+	end
+
+	function Fling.setEnabled(on)
+		if on then Fling.start() else Fling.stop() end
+	end
+
+	function Fling.setPunch(on)
+		Fling.punch = on
+		if Fling.enabled then
+			if on then playAnim() else stopAnim() end
+		end
+	end
+
+	function Fling.setNoclip(on)
+		Fling.noclip = on
+		if player.Character and not on then
+			disCol(player.Character, true)
+		end
+	end
+
+	player.CharacterAdded:Connect(function()
+		if Fling.enabled then
+			Fling.stop()
+		end
 	end)
+
+	function Fling.shutdown()
+		Fling.stop()
+	end
 end
 
 ------------------------------------------------------------
--- PULO INFINITO
+-- PÁGINA 1: VELOCIDADE · PULO · ESP · NOCLIP
 ------------------------------------------------------------
+do
+	local c = card(158, C.blue, "VELOCIDADE", "⚡")
+	navWidget(c)
+
+	local setBox = valueBox(c, 52, 42, cardW - 64, 38, "25", C.blue, 22)
+
+	-- BOTÃO 25 (Fundo Azul Forte com Texto Branco para destaque)
+	local BTN25_BG = Color3.fromRGB(55, 135, 230) -- Azul idêntico ao da imagem
+	local btn25 = new("TextButton", {
+		Parent = c.frame, Position = UDim2.fromOffset(12, 42), Size = UDim2.fromOffset(34, 38),
+		BackgroundColor3 = BTN25_BG, Text = "25", TextColor3 = Color3.new(1, 1, 1), TextSize = 15,
+		Font = Enum.Font.GothamBold, AutoButtonColor = false,
+	}, {corner(9)})
+	local btn25st = stroke(BTN25_BG:Lerp(Color3.new(1, 1, 1), 0.3), 1.5, 0) -- Borda sutil clareada
+	btn25st.Parent = btn25
+
+	btn25.MouseEnter:Connect(function()
+		tw(btn25, 0.15, {BackgroundColor3 = BTN25_BG:Lerp(Color3.new(1, 1, 1), 0.2)})
+	end)
+	btn25.MouseLeave:Connect(function()
+		tw(btn25, 0.2, {BackgroundColor3 = BTN25_BG})
+	end)
+
+	local sliderSet
+	sliderSet = slider(c, 96, 5, 500, 25, function(v)
+		setBox(tostring(v))
+		Speed.setValue(v)
+	end)
+
+	btn25.MouseButton1Click:Connect(function()
+		sliderSet(25)
+	end)
+
+	toggle(c, 30, 108, cardW - 60, 26, function(on)
+		Speed.setEnabled(on)
+	end)
+	hint(c, "Anti-ragdoll · Anti-stun · Força", 140)
+end
+
 do
 	local c = card(92, C.pink, "PULO INFINITO", "🚀")
 	toggle(c, 30, 40, cardW - 60, 28, function(on)
@@ -1213,9 +1460,6 @@ do
 	hint(c, "Espaço para pular", 72)
 end
 
-------------------------------------------------------------
--- ESP
-------------------------------------------------------------
 do
 	local c = card(92, C.purple, "ESP", "👁")
 	toggle(c, 30, 40, cardW - 60, 28, function(on)
@@ -1224,9 +1468,6 @@ do
 	hint(c, "Nome · Distância · Chams", 72)
 end
 
-------------------------------------------------------------
--- NOCLIP
-------------------------------------------------------------
 do
 	local c = card(92, C.violet, "NOCLIP", "👻")
 	toggle(c, 30, 40, cardW - 60, 28, function(on)
@@ -1237,19 +1478,16 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: AUTOPRESSER / CLICKER
--- Só funciona com o botão da seção em ON.
---  • Modo CLICK: a tecla definida liga/desliga o autoclick, que clica onde o mouse estiver.
---  • Modo HOLD: a 1ª tecla liga/desliga; ao ligar, a 2ª tecla fica SEGURADA.
--- Usa o VirtualInputManager (disponível na maioria dos executores).
 ------------------------------------------------------------
 local AutoP = {enabled = false, mode = "click", active = false, capturing = false, lastClick = 0}
-AutoP.keys = {click = Enum.KeyCode.R, holdAct = Enum.KeyCode.R, holdKey = Enum.KeyCode.E}
+-- Teclas padrão: Click = E | HoldAct = R | HoldKey = E
+AutoP.keys = {click = Enum.KeyCode.E, holdAct = Enum.KeyCode.R, holdKey = Enum.KeyCode.E}
 do
-	local CPS = 500                     -- cliques por segundo
+	local CPS = 2000
 	local CLICK_INTERVAL = 1 / CPS
-	local MAX_PER_FRAME = 40            -- limite de cliques enviados por frame (proteção)
-	local ignoreUntil = 0               -- ignora o eco das teclas que o próprio script envia
-	local holding = nil                 -- tecla atualmente segurada
+	local MAX_PER_FRAME = 100
+	local ignoreUntil = 0
+	local holding = nil
 
 	local VIM
 	pcall(function() VIM = game:GetService("VirtualInputManager") end)
@@ -1259,10 +1497,9 @@ do
 		return m.X >= p.X and m.X <= p.X + sz.X and m.Y >= p.Y and m.Y <= p.Y + sz.Y
 	end
 
-	-- envia n cliques (apertar + soltar) na posição atual do mouse
 	local function clickAtMouse(n)
 		local m = UIS:GetMouseLocation()
-		if mouseOverPanel(m) then return end -- não clica nos botões do próprio painel
+		if mouseOverPanel(m) then return end
 		local ok = false
 		if VIM then
 			ok = pcall(function()
@@ -1272,7 +1509,7 @@ do
 				end
 			end)
 		end
-		if not ok and mouse1click then -- alternativa de alguns executores
+		if not ok and mouse1click then
 			for _ = 1, n do pcall(mouse1click) end
 		end
 	end
@@ -1324,11 +1561,9 @@ do
 		notify()
 	end
 
-	-- chamado a cada frame: dispara os cliques no modo CLICK
 	function AutoP.update()
 		if not (AutoP.enabled and AutoP.active and AutoP.mode == "click") then return end
 		local now = os.clock()
-		-- quantos cliques "devidos" desde o último frame (vários por frame em CPS alto)
 		local n = math.floor((now - AutoP.lastClick) * CPS)
 		if n < 1 then return end
 		if n > MAX_PER_FRAME then
@@ -1340,7 +1575,6 @@ do
 		clickAtMouse(n)
 	end
 
-	-- tecla de atalho (liga/desliga)
 	AutoP.conn = UIS.InputBegan:Connect(function(input)
 		if not AutoP.enabled or AutoP.capturing then return end
 		if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
@@ -1359,14 +1593,10 @@ do
 	end
 end
 
-------------------------------------------------------------
--- AUTOPRESSER / CLICKER
-------------------------------------------------------------
 do
 	local c = card(138, C.orange, "AUTOPRESSER / CLICKER", "🖱")
 	toggle(c, 12, 40, 108, 40, function(on) AutoP.setEnabled(on) end)
 
-	-- botões de teclas
 	local function newKeyBtn(x, w)
 		local b = new("TextButton", {
 			Parent = c.frame, Position = UDim2.fromOffset(x, 106), Size = UDim2.fromOffset(w, 24),
@@ -1377,8 +1607,8 @@ do
 		b.MouseLeave:Connect(function() tw(b, 0.2, {BackgroundColor3 = C.bg2}) end)
 		return b
 	end
-	local kA = newKeyBtn(12, 198) -- CLICK: tecla do autoclick | HOLD: tecla de ativação
-	local kB = newKeyBtn(117, 93) -- HOLD: tecla que será segurada
+	local kA = newKeyBtn(12, 198)
+	local kB = newKeyBtn(117, 93)
 	kB.Visible = false
 
 	local function slotOf(btn)
@@ -1392,7 +1622,6 @@ do
 		btn.TextSize = #name > 6 and 10 or 13
 	end
 
-	-- dica de uso
 	local hintLbl = hint(c, "", 86)
 	local function refresh()
 		local k = AutoP.keys
@@ -1412,7 +1641,6 @@ do
 	end
 	AutoP.onChange = refresh
 
-	-- layout das teclas conforme o modo (1 tecla no CLICK, 2 no HOLD)
 	local function layout(animate)
 		local hold = AutoP.mode == "hold"
 		local t = animate and 0.25 or 0
@@ -1430,7 +1658,6 @@ do
 		end
 	end
 
-	-- modos: CLICK (padrão) e HOLD
 	local pills = {}
 	local modes = {"click", "hold"}
 	local function paintPills()
@@ -1456,7 +1683,6 @@ do
 		end)
 	end
 
-	-- trocar a tecla: clica, aparece "...", e a próxima tecla apertada vira o novo atalho
 	local function bind(btn)
 		btn.MouseButton1Click:Connect(function()
 			if AutoP.capturing then return end
@@ -1486,15 +1712,11 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: FLY (clássico)
--- Com o botão da seção em ON, a tecla [F] liga/desliga o voo.
---  • W A S D: voa na direção da câmera (inclusive para cima/baixo, olhando para cima/baixo)
---  • Espaço: sobe | Shift (ou Ctrl): desce
---  • Slider: velocidade de voo = nível x 3 x velocidade de caminhada
 ------------------------------------------------------------
 local Fly = {enabled = false, active = false, value = 1}
 do
-	local FLY_MULT = 3      -- cada nível do slider = 3x a velocidade de caminhada
-	local MAX_SPEED = 2000  -- limite de segurança (studs/s)
+	local FLY_MULT = 3
+	local MAX_SPEED = 2000
 	local FLY_KEY = Enum.KeyCode.F
 	local bv, bg
 
@@ -1513,6 +1735,7 @@ do
 		Fly.active = false
 		Noclip.suspendGround = false
 		InfJump.suspended = false
+		Speed.flying = false
 		if bv then bv:Destroy(); bv = nil end
 		if bg then bg:Destroy(); bg = nil end
 
@@ -1520,7 +1743,6 @@ do
 		if hum then hum.PlatformStand = false end
 		if root then
 			root.AssemblyLinearVelocity = Vector3.zero
-			-- endireita o personagem (sem inclinação)
 			local look = root.CFrame.LookVector
 			local flat = Vector3.new(look.X, 0, look.Z)
 			if flat.Magnitude > 0.01 then
@@ -1534,8 +1756,9 @@ do
 		local hum, root = getParts()
 		if not hum or not root or hum.Health <= 0 then return end
 		Fly.active = true
-		Noclip.suspendGround = true -- evita conflito com o apoio no chão do Noclip
-		InfJump.suspended = true    -- e com o pulo infinito
+		Noclip.suspendGround = true
+		InfJump.suspended = true
+		Speed.flying = true
 		hum.PlatformStand = true
 
 		bv = Instance.new("BodyVelocity")
@@ -1561,7 +1784,6 @@ do
 		Fly.value = v
 	end
 
-	-- chamado a cada frame enquanto estiver voando
 	function Fly.update()
 		if not Fly.active then return end
 		local hum, root = getParts()
@@ -1585,7 +1807,6 @@ do
 			end
 		end
 
-		-- celular / analógico: usa a direção de movimento do personagem
 		if dir.Magnitude == 0 then
 			local md = hum.MoveDirection
 			if md.Magnitude > 0 then
@@ -1605,7 +1826,6 @@ do
 		bg.CFrame = cam.CFrame
 	end
 
-	-- tecla fixa [F]
 	Fly.conn = UIS.InputBegan:Connect(function(input)
 		if not Fly.enabled then return end
 		if input.UserInputType ~= Enum.UserInputType.Keyboard or input.KeyCode ~= FLY_KEY then return end
@@ -1620,9 +1840,6 @@ do
 	end
 end
 
-------------------------------------------------------------
--- FLY
-------------------------------------------------------------
 do
 	local c = card(158, C.cyan, "FLY", "✈")
 	local setBox = valueBox(c, 50, 42, cardW - 100, 36, "1", C.cyan, 20)
@@ -1648,20 +1865,13 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: AIMBOT
--- Com o botão em ON, a câmera mira sozinha na cabeça do jogador mais próximo do centro da tela
--- que esteja dentro do círculo de FOV.
---  • FOV (slider): raio do círculo = nível x PX_PER_LEVEL pixels.
---  • Botão do círculo: mostra/esconde o círculo do FOV na tela (independente do aimbot).
---  • AUTO SHOT: com o aimbot travado no alvo, clica sozinho para atirar. Pausa quando você está morto,
---    com o menu do Roblox aberto, com o mouse sobre o painel ou sobre algum botão do jogo.
---  • Só mira em quem está visível (sem parede no meio) — veja WALL_CHECK.
 ------------------------------------------------------------
 local Aimbot = {enabled = false, teamCheck = false, autoShot = false, showFov = false, fov = 2, target = nil}
 do
-	local PX_PER_LEVEL = 50    -- raio do FOV em pixels por nível do slider
-	local WALL_CHECK = true    -- só mira em jogadores visíveis
-	local SHOT_CPS = 12        -- cliques por segundo do AUTO SHOT
-	local SHOT_TOLERANCE = 35  -- distância (px) do centro para o AUTO SHOT começar a atirar
+	local PX_PER_LEVEL = 50
+	local WALL_CHECK = true
+	local SHOT_CPS = 12
+	local SHOT_TOLERANCE = 35
 	local BIND_NAME = "BSC_Aimbot"
 
 	local VIM
@@ -1673,20 +1883,17 @@ do
 	rayParams.IgnoreWater = true
 	rayParams.RespectCanCollide = true
 
-	-- o personagem está morto (ou ainda não existe)?
 	local function isDead()
 		local ch = player.Character
 		local hum = ch and ch:FindFirstChildOfClass("Humanoid")
 		return not hum or hum.Health <= 0
 	end
 
-	-- o mouse está sobre o painel?
 	local function mouseOverPanel(m)
 		local p, sz = main.AbsolutePosition, main.AbsoluteSize
 		return m.X >= p.X and m.X <= p.X + sz.X and m.Y >= p.Y and m.Y <= p.Y + sz.Y
 	end
 
-	-- o mouse está sobre algum botão do jogo (ex.: botão de reviver)?
 	local function overGuiButton(m)
 		local ok, objs = pcall(function()
 			local inset = GuiService:GetGuiInset()
@@ -1701,7 +1908,6 @@ do
 
 	local function diameter(level) return 2 * level * PX_PER_LEVEL end
 
-	-- círculo do FOV (centro da tela)
 	local fovCircle = new("Frame", {
 		Parent = gui, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(diameter(Aimbot.fov), diameter(Aimbot.fov)),
@@ -1711,7 +1917,6 @@ do
 		stroke(C.on, 1.5, 0.35),
 	})
 
-	-- devolve (distância até o centro da tela, cabeça) se o jogador for um alvo válido
 	local function evaluate(plr)
 		if plr == player then return end
 		if Aimbot.teamCheck and plr.Team ~= nil and plr.Team == player.Team then return end
@@ -1738,7 +1943,6 @@ do
 		return d, head
 	end
 
-	-- mantém o alvo atual enquanto ele for válido; senão escolhe o mais próximo do centro
 	local function pickTarget()
 		local cur = Aimbot.target
 		if cur then
@@ -1760,7 +1964,7 @@ do
 		local now = os.clock()
 		if now - lastShot < 1 / SHOT_CPS then return end
 		lastShot = now
-		local c = UIS:GetMouseLocation() -- clica onde o mouse já está (não mexe no cursor)
+		local c = UIS:GetMouseLocation()
 		local ok = false
 		if VIM then
 			ok = pcall(function()
@@ -1771,13 +1975,10 @@ do
 		if not ok and mouse1click then pcall(mouse1click) end
 	end
 
-	-- roda logo depois da câmera do jogo, a cada frame
 	local function step(dt)
 		local cam = workspace.CurrentCamera
 		if not cam then return end
 
-		-- morto ou com o menu do Roblox aberto: o aimbot não faz nada,
-		-- assim dá para clicar normalmente (botão de reviver, respawnar, sair...)
 		if isDead() or GuiService.MenuIsOpen then
 			Aimbot.target = nil
 			return
@@ -1787,13 +1988,11 @@ do
 		Aimbot.target = plr
 		if not plr then return end
 
-		-- trava instantânea na cabeça, sem nenhuma suavização
 		cam.CFrame = CFrame.lookAt(cam.CFrame.Position, head.Position)
 
 		if Aimbot.autoShot then
 			local pos = cam:WorldToViewportPoint(head.Position)
 			if (Vector2.new(pos.X, pos.Y) - cam.ViewportSize / 2).Magnitude <= SHOT_TOLERANCE then
-				-- não atira enquanto você usa o painel ou clica em algum botão do jogo
 				local m = UIS:GetMouseLocation()
 				if not mouseOverPanel(m) and not overGuiButton(m) then
 					fire()
@@ -1830,8 +2029,6 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: TP CLICK
--- Com o botão em ON: segure Ctrl ESQUERDO e clique com o botão esquerdo do mouse
--- para teleportar o personagem para o ponto exato onde está o mouse.
 ------------------------------------------------------------
 local TPClick = {enabled = false}
 do
@@ -1864,7 +2061,7 @@ do
 		if gp or UIS:GetFocusedTextBox() then return end
 
 		local m = UIS:GetMouseLocation()
-		if mouseOverPanel(m) then return end -- clique no próprio painel não teleporta
+		if mouseOverPanel(m) then return end
 
 		local cam = workspace.CurrentCamera
 		local ch = player.Character
@@ -1872,7 +2069,6 @@ do
 		local root = ch and ch:FindFirstChild("HumanoidRootPart")
 		if not cam or not hum or not root or hum.Health <= 0 then return end
 
-		-- ponto do mundo que está embaixo do mouse
 		local ray = cam:ViewportPointToRay(m.X, m.Y)
 		params.FilterDescendantsInstances = {ch}
 		local res = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
@@ -1880,16 +2076,14 @@ do
 
 		local pos
 		if res.Normal.Y > 0.5 then
-			-- chão/superfície voltada para cima: os pés ficam exatamente no ponto clicado
 			pos = res.Position + Vector3.new(0, standHeight(hum, root, ch), 0)
 		else
-			-- parede: fica um pouco à frente da superfície, no ponto clicado
 			pos = res.Position + res.Normal * 2
 		end
 
-		root.CFrame = CFrame.new(pos) * (root.CFrame - root.CFrame.Position) -- mantém a direção do corpo
+		root.CFrame = CFrame.new(pos) * (root.CFrame - root.CFrame.Position)
 		root.AssemblyLinearVelocity = Vector3.zero
-		Noclip.lastGroundY = nil -- o Noclip esquece o chão antigo
+		Noclip.lastGroundY = nil
 	end)
 
 	function TPClick.shutdown()
@@ -1900,13 +2094,11 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: TP JOGADOR
--- Sempre ativo: clicar no nome de um jogador da lista teleporta o personagem até ele.
 ------------------------------------------------------------
-local TPPlayer = {enabled = true, conns = {}} -- sempre ativo
+local TPPlayer = {enabled = true, conns = {}}
 do
-	local BEHIND = 3 -- studs atrás do jogador (0 = exatamente na posição dele)
+	local BEHIND = 3
 
-	-- devolve true se conseguiu teleportar
 	function TPPlayer.teleportTo(plr)
 		if not TPPlayer.enabled then return false end
 		local ch = player.Character
@@ -1930,17 +2122,12 @@ end
 
 ------------------------------------------------------------
 -- LÓGICA: HITBOX EXPANDER
--- Com o botão em ON, a hitbox (HumanoidRootPart) dos outros jogadores vira 120x120x120.
--- O botão do olho mostra a hitbox dos jogadores (tamanho normal; com o expander ligado, 120x120),
--- mesmo que o expander esteja desligado.
--- Ao desligar, o tamanho original de cada jogador é restaurado.
--- (Só o tamanho e a colisão são alterados, para não atrapalhar o movimento dos jogadores.)
 ------------------------------------------------------------
 local Hitbox = {enabled = false, showBox = false}
 do
 	local EXPANDED = Vector3.new(120, 120, 120)
 	local BOX_COLOR = Color3.new(1, 1, 1)
-	local state = setmetatable({}, {__mode = "k"}) -- HumanoidRootPart -> dados originais / caixa visual
+	local state = setmetatable({}, {__mode = "k"})
 
 	local function stateOf(root)
 		local st = state[root]
@@ -1959,7 +2146,6 @@ do
 		st.expanded = false
 	end
 
-	-- chamado a cada frame
 	function Hitbox.update()
 		if not (Hitbox.enabled or Hitbox.showBox) then return end
 
@@ -1970,7 +2156,6 @@ do
 				if root then
 					local st = stateOf(root)
 
-					-- 1) aumento da hitbox
 					if Hitbox.enabled then
 						if not st.expanded then
 							st.origSize = root.Size
@@ -1978,12 +2163,11 @@ do
 							st.expanded = true
 						end
 						if root.Size ~= EXPANDED then root.Size = EXPANDED end
-						if root.CanCollide then root.CanCollide = false end -- não empurra ninguém
+						if root.CanCollide then root.CanCollide = false end
 					elseif st.expanded then
 						restore(root, st)
 					end
 
-					-- 2) caixa visual da hitbox (olho)
 					if Hitbox.showBox then
 						if not st.adorn or not st.adorn.Parent then
 							st.adorn = new("BoxHandleAdornment", {
@@ -2055,10 +2239,8 @@ do
 end
 
 ------------------------------------------------------------
--- PÁGINA 2: AIMBOT · HITBOX EXPANDER · TP CLICK · TP JOGADOR
--- (somente interface por enquanto: as funções entram nos "onChange")
+-- PÁGINA 2: AIMBOT · HITBOX · TP CLICK · TP JOGADOR · FULLBRIGHT · FLING
 ------------------------------------------------------------
--- slider vertical (valor no topo = máximo)
 local function vslider(c, x, y, h, minV, maxV, startV, cb)
 	local f = c.frame
 	local track = new("Frame", {
@@ -2073,7 +2255,6 @@ local function vslider(c, x, y, h, minV, maxV, startV, cb)
 		Parent = track, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12),
 		Position = UDim2.fromScale(0.5, 1), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 2,
 	}, {corner(8), stroke(c.accent, 2, 0)})
-	-- só a bolinha arrasta o slider (a área invisível é um pouco maior para facilitar pegar nela)
 	local hit = new("TextButton", {
 		Parent = knob, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(26, 26), BackgroundTransparency = 1, Text = "", ZIndex = 3,
@@ -2093,7 +2274,7 @@ local function vslider(c, x, y, h, minV, maxV, startV, cb)
 	setValue(startV)
 
 	local dragging = false
-	local grab = 0 -- distância entre o ponto clicado e o centro da bolinha (evita "pulo" ao pegar)
+	local grab = 0
 	local function update()
 		local my = UIS:GetMouseLocation().Y - grab
 		local a = 1 - math.clamp((my - track.AbsolutePosition.Y) / track.AbsoluteSize.Y, 0, 1)
@@ -2125,7 +2306,6 @@ do
 	navWidget(c)
 	toggle(c, 12, 44, 104, 32, function(on) Aimbot.setEnabled(on) end)
 
-	-- botão do FOV (círculo): mostra / esconde o círculo do FOV na tela
 	local fovBtn = new("TextButton", {
 		Parent = c.frame, Position = UDim2.fromOffset(122, 44), Size = UDim2.fromOffset(30, 30),
 		BackgroundColor3 = C.bg2, Text = "", AutoButtonColor = false,
@@ -2153,7 +2333,6 @@ do
 		Aimbot.setShowFov(fovOn)
 	end)
 
-	-- AUTO SHOT
 	local shot = new("TextButton", {
 		Parent = c.frame, Position = UDim2.fromOffset(12, 86), Size = UDim2.fromOffset(104, 28),
 		BackgroundColor3 = C.bg2, Text = "AUTO SHOT", TextColor3 = C.text, TextSize = 11,
@@ -2175,7 +2354,6 @@ do
 		Aimbot.autoShot = shotOn
 	end)
 
-	-- FOV (slider vertical)
 	local fovBox = label(c.frame, "2", 14, UDim2.fromOffset(150, 40), UDim2.fromOffset(46, 18), C.on, true)
 	local fovSc = new("UIScale", {Parent = fovBox})
 	label(c.frame, "10", 8, UDim2.fromOffset(178, 62), UDim2.fromOffset(20, 10), C.sub, false, Enum.TextXAlignment.Left)
@@ -2194,7 +2372,6 @@ do
 	local c = card(100, Color3.fromRGB(245, 200, 70), "HITBOX EXPANDER", "🎯", page2)
 	toggle(c, 24, 40, 112, 30, function(on) Hitbox.setEnabled(on) end)
 
-	-- botão do olho (mostrar/esconder a hitbox) — começa "cortado" (escondida)
 	local eye = new("TextButton", {
 		Parent = c.frame, Position = UDim2.fromOffset(152, 40), Size = UDim2.fromOffset(30, 30),
 		BackgroundColor3 = C.bg2, Text = "👁", TextSize = 15, TextColor3 = C.text, AutoButtonColor = false,
@@ -2229,14 +2406,11 @@ end
 do
 	local c = card(194, C.purple, "TP JOGADOR", "👥", page2)
 	local listEmpty
-
 	local entries = {}
 
-	-- sempre ativo: o indicador do card fica verde e pulsando
 	c.dot.BackgroundColor3 = C.on
 	activeDots[c.dot] = true
 
-	-- barra de pesquisa
 	local searchBox = new("TextBox", {
 		Parent = c.frame, Position = UDim2.fromOffset(12, 40), Size = UDim2.fromOffset(cardW - 24, 24),
 		BackgroundColor3 = C.bg2, Text = "", PlaceholderText = "Pesquisar jogador...",
@@ -2251,7 +2425,6 @@ do
 	searchBox.Focused:Connect(function() tw(searchStroke, 0.2, {Color = C.purple, Transparency = 0.1}) end)
 	searchBox.FocusLost:Connect(function() tw(searchStroke, 0.2, {Color = C.line, Transparency = 0.4}) end)
 
-	-- lista de jogadores (rolável)
 	local listFrame = new("ScrollingFrame", {
 		Parent = c.frame, Position = UDim2.fromOffset(12, 70), Size = UDim2.fromOffset(cardW - 24, 100),
 		BackgroundColor3 = C.bg2, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = C.line,
@@ -2266,11 +2439,6 @@ do
 		new("UIListLayout", {Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.Name}),
 	})
 
-	-- rolagem com a roda do mouse menos sensível: cada "clique" da roda anda só SCROLL_STEP pixels
-	-- Rolagem da lista com a roda do mouse, suave e pouco sensível: cada "clique" da roda soma
-	-- SCROLL_STEP a um alvo, e a posição real do scroll desliza até esse alvo com um tween.
-	-- O limite é calculado com medidas fixas da própria lista (altura de cada nome, espaçamento e
-	-- margens), sem depender de AbsoluteCanvasSize/AbsoluteWindowSize, que misturam a escala do painel.
 	local SCROLL_STEP = 16
 	local ROW_H, ROW_GAP, LIST_PAD, LIST_H = 24, 4, 8, 100
 	listFrame.ScrollingEnabled = false
@@ -2293,24 +2461,18 @@ do
 		scrollTween = tw(listFrame, 0.18, {CanvasPosition = Vector2.new(0, y)}, Enum.EasingStyle.Quad)
 	end
 
-	-- o evento vem do próprio Roblox (só dispara com o mouse sobre a lista ou sobre um nome dela),
-	-- então não há conta de posição do mouse que possa errar. SetInputSinkConsumed trava o evento
-	-- aqui, para a roda do mouse não chegar à câmera do jogo e mexer no zoom.
-	local function onWheel(input, processed)
+	local function onWheel(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end
 		scrollTo(scrollTarget - input.Position.Z * SCROLL_STEP)
-		pcall(function() UIS:SetInputSinkConsumed(input) end)
 	end
 	listFrame.InputChanged:Connect(onWheel)
 
-	-- quando a lista é filtrada pela pesquisa, o limite muda: mantém o alvo dentro do novo limite
 	local function clampScrollTarget()
 		scrollTo(scrollTarget)
 	end
 
 	listEmpty = label(c.frame, "Nenhum outro jogador no servidor", 9, UDim2.fromOffset(12, 112), UDim2.fromOffset(cardW - 24, 14), C.sub)
 
-	-- filtro da pesquisa: aparece quem tiver o texto no nome de usuário ou no nome de exibição
 	local query = ""
 	local function matches(plr)
 		if query == "" then return true end
@@ -2360,11 +2522,10 @@ do
 		b.InputChanged:Connect(onWheel)
 		b.MouseButton1Click:Connect(function()
 			if TPPlayer.teleportTo(plr) then
-				flash(b, C.on)   -- teleportou
+				flash(b, C.on)
 			else
-				flash(b, C.off)  -- jogador ainda não carregado
+				flash(b, C.off)
 			end
-			-- limpa a pesquisa: a barra fica vazia e pronta para o próximo nome
 			searchBox:ReleaseFocus()
 			searchBox.Text = ""
 		end)
@@ -2398,7 +2559,76 @@ do
 	hint(c, "Remove todas as sombras", 72)
 end
 
+-- FLING (PUNCH) --------------------------------------------------
+do
+	local c = card(160, C.pink, "FLING (PUNCH)", "🥊", page2)
+
+	toggle(c, 30, 40, cardW - 60, 28, function(on) Fling.setEnabled(on) end)
+
+	local powBox = textInput(c, 12, 80, 90, 24, "1000000", "Power")
+	local xBox = textInput(c, 108, 80, 32, 24, "0", "X")
+	local yBox = textInput(c, 144, 80, 32, 24, "1", "Y")
+	local zBox = textInput(c, 180, 80, 32, 24, "0", "Z")
+
+	powBox:GetPropertyChangedSignal("Text"):Connect(function()
+		Fling.power = tonumber(powBox.Text) or 1
+	end)
+	xBox:GetPropertyChangedSignal("Text"):Connect(function()
+		Fling.x = tonumber(xBox.Text) or 0
+	end)
+	yBox:GetPropertyChangedSignal("Text"):Connect(function()
+		Fling.y = tonumber(yBox.Text) or 0
+	end)
+	zBox:GetPropertyChangedSignal("Text"):Connect(function()
+		Fling.z = tonumber(zBox.Text) or 0
+	end)
+
+	local function miniBtn(x, text, activeColor, onClick)
+		local b = new("TextButton", {
+			Parent = c.frame, Position = UDim2.fromOffset(x, 115), Size = UDim2.fromOffset(99, 26),
+			BackgroundColor3 = C.bg2, Text = text, TextColor3 = C.sub, TextSize = 10,
+			Font = Enum.Font.GothamBold, AutoButtonColor = false,
+		}, {corner(8)})
+		local st = stroke(C.line, 1, 0.3)
+		st.Parent = b
+
+		local state = false
+		local function paint()
+			tw(b, 0.2, {BackgroundColor3 = state and activeColor or C.bg2})
+			tw(b, 0.2, {TextColor3 = state and Color3.new(1,1,1) or C.sub})
+			tw(st, 0.2, {Color = state and activeColor or C.line, Transparency = state and 0.1 or 0.3})
+		end
+
+		b.MouseEnter:Connect(function() if not state then tw(b, 0.15, {BackgroundColor3 = C.card1}) end end)
+		b.MouseLeave:Connect(function() if not state then tw(b, 0.2, {BackgroundColor3 = C.bg2}) end end)
+
+		b.MouseButton1Click:Connect(function()
+			state = not state
+			paint()
+			onClick(state)
+		end)
+	end
+
+	miniBtn(12, "PUNCH MODE", C.on, function(on) Fling.setPunch(on) end)
+	miniBtn(117, "NOCLIP", C.violet, function(on) Fling.setNoclip(on) end)
+
+end
+
 scroll2.CanvasSize = UDim2.fromOffset(0, page2.cursor + 20)
+
+------------------------------------------------------------
+-- PÁGINA 3: (vazia, reservada para o futuro)
+------------------------------------------------------------
+do
+	local navHost = new("Frame", {
+		Parent = scroll3, Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(cardW, 40),
+		BackgroundTransparency = 1,
+	})
+	navWidget({frame = navHost, accent = C.sub})
+	label(scroll3, "Reservado para novas funções", 10, UDim2.fromOffset(14, 60), UDim2.fromOffset(cardW, 16), C.sub)
+	page3.cursor = 80
+end
+scroll3.CanvasSize = UDim2.fromOffset(0, page3.cursor + 20)
 
 ------------------------------------------------------------
 -- Rodapé (espaço extra no final)
@@ -2410,27 +2640,23 @@ do
 	}, {corner(1)})
 	addRainbow(new("UIGradient", {Parent = line}), 0.6)
 	label(scroll, "Basic Settings · v2.0", 9, UDim2.fromOffset(0, cursor + 16), UDim2.fromOffset(W, 14), C.sub)
-	cursor = cursor + 64 -- base com espaço uniforme no final
+	cursor = cursor + 64
 end
 scroll.CanvasSize = UDim2.fromOffset(0, cursor)
 
--- Altura automática: o painel mostra tudo sem cortar.
--- Se a tela for pequena, o painel inteiro é reduzido para caber.
 local totalH = 58 + cursor
-local UI_SCALE = 0.85 -- tamanho do painel (1 = tamanho original; menor = painel menor)
+local UI_SCALE = 0.85
 local fit = math.clamp((viewH - 30) / totalH, 0.55, UI_SCALE)
 H = math.min(totalH, (viewH - 30) / fit)
 main.Size = UDim2.fromOffset(W, H)
 scroll.Size = UDim2.fromOffset(W, H - 58)
 scroll2.Size = UDim2.fromOffset(W, H - 58)
--- centraliza na vertical; como a âncora é o topo, o cabeçalho fica fixo ao minimizar
+scroll3.Size = UDim2.fromOffset(W, H - 58)
 main.Position = UDim2.fromOffset(40, math.max(10, math.floor((viewH - H * fit) / 2)))
 
 ------------------------------------------------------------
 -- Animação contínua
 ------------------------------------------------------------
--- Autocorreção: se alguma animação for interrompida e deixar o painel "apagado" (escuro),
--- o visual volta ao normal sozinho depois que não houver animação em andamento.
 local closing = false
 local lastHeal = 0
 local function healUI()
@@ -2449,7 +2675,6 @@ local function healUI()
 	end
 end
 
--- cada função roda protegida (pcall): um erro numa função não para as outras nem o visual do painel
 local updaters = {Speed.enforce, InfJump.update, ESP.update, AutoP.update, Fly.update, Hitbox.update, Fullbright.enforce, healUI}
 
 local t0 = os.clock()
@@ -2485,6 +2710,7 @@ gui.Destroying:Connect(function()
 	TPPlayer.shutdown()
 	Hitbox.shutdown()
 	Fullbright.shutdown()
+	Fling.shutdown()
 end)
 
 ------------------------------------------------------------
@@ -2494,12 +2720,11 @@ local minimized = false
 minBtn.MouseButton1Click:Connect(function()
 	minimized = not minimized
 	if minimized then
-		-- o cabeçalho fica parado e o corpo recolhe de baixo para cima até ele
 		tw(main, 0.35, {Size = UDim2.fromOffset(W, 56)}, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut)
 		task.delay(0.36, function()
 			if minimized then
 				pages[Pager.current].Visible = false
-				headerFill.Visible = false -- cantos de baixo arredondados quando só o cabeçalho sobra
+				headerFill.Visible = false
 			end
 		end)
 	else
@@ -2518,11 +2743,9 @@ closeBtn.MouseButton1Click:Connect(function()
 	task.delay(0.32, function() gui:Destroy() end)
 end)
 
--- Entrada do painel
 tw(content, 0.35, {GroupTransparency = 0})
 tw(main, 0.35, {BackgroundTransparency = 0})
 tw(mainStroke, 0.35, {Transparency = 0.15})
 tw(mainScale, 0.5, {Scale = fit}, Enum.EasingStyle.Back)
 
--- Entrada dos cards em cascata
 playEntrance(cardList)
