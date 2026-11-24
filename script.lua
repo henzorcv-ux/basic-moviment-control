@@ -2699,6 +2699,7 @@ local conn = RS.Heartbeat:Connect(function()
 end)
 gui.Destroying:Connect(function()
 	conn:Disconnect()
+	setZoomLock(false)
 	Speed.shutdown()
 	InfJump.shutdown()
 	ESP.shutdown()
@@ -2712,6 +2713,37 @@ gui.Destroying:Connect(function()
 	Fullbright.shutdown()
 	Fling.shutdown()
 end)
+
+------------------------------------------------------------
+-- Trava de zoom: enquanto o mouse estiver sobre o painel, o zoom da câmera do jogo
+-- fica travado (distância mínima = máxima = distância atual). Ao sair do painel, volta ao normal.
+------------------------------------------------------------
+local ZoomLock = {locked = false, savedMin = nil, savedMax = nil}
+
+local function setZoomLock(on)
+	local lp = player
+	if on and not ZoomLock.locked then
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+		local ok = pcall(function()
+			ZoomLock.savedMin = lp.CameraMinZoomDistance
+			ZoomLock.savedMax = lp.CameraMaxZoomDistance
+			local cur = (cam.CFrame.Position - cam.Focus.Position).Magnitude
+			lp.CameraMinZoomDistance = cur
+			lp.CameraMaxZoomDistance = cur
+		end)
+		ZoomLock.locked = ok
+	elseif not on and ZoomLock.locked then
+		pcall(function()
+			lp.CameraMinZoomDistance = ZoomLock.savedMin
+			lp.CameraMaxZoomDistance = ZoomLock.savedMax
+		end)
+		ZoomLock.locked = false
+	end
+end
+
+main.MouseEnter:Connect(function() setZoomLock(true) end)
+main.MouseLeave:Connect(function() setZoomLock(false) end)
 
 ------------------------------------------------------------
 -- Minimizar / Fechar / Entrada
