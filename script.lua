@@ -1752,6 +1752,24 @@ do
 		notify()
 	end
 
+	-- Limpa qualquer resto de voo (peças do voo e estados travados) e devolve o personagem ao normal.
+	-- Só atua quando o voo NÃO está ativo, para não interferir num voo em andamento.
+	local function recover()
+		if Fly.active then return end
+		local ch = player.Character
+		if ch then
+			for _, d in ipairs(ch:GetDescendants()) do
+				if d.Name == "BSC_FlyBV" or d.Name == "BSC_FlyBG" then d:Destroy() end
+			end
+		end
+		local hum = getParts()
+		if hum and hum.PlatformStand then hum.PlatformStand = false end
+		Noclip.suspendGround = false
+		InfJump.suspended = false
+		Speed.flying = false
+	end
+	Fly.recover = recover
+
 	local function start()
 		local hum, root = getParts()
 		if not hum or not root or hum.Health <= 0 then return end
@@ -1762,11 +1780,13 @@ do
 		hum.PlatformStand = true
 
 		bv = Instance.new("BodyVelocity")
+		bv.Name = "BSC_FlyBV"
 		bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
 		bv.Velocity = Vector3.zero
 		bv.Parent = root
 
 		bg = Instance.new("BodyGyro")
+		bg.Name = "BSC_FlyBG"
 		bg.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
 		bg.P = 9e4
 		bg.D = 1000
@@ -1777,7 +1797,10 @@ do
 
 	function Fly.setEnabled(on)
 		Fly.enabled = on
-		if not on then stop() end
+		if not on then
+			stop()
+			recover()
+		end
 	end
 
 	function Fly.setValue(v)
@@ -1827,9 +1850,9 @@ do
 	end
 
 	Fly.conn = UIS.InputBegan:Connect(function(input)
-		if not Fly.enabled then return end
 		if input.UserInputType ~= Enum.UserInputType.Keyboard or input.KeyCode ~= FLY_KEY then return end
 		if UIS:GetFocusedTextBox() then return end
+		if not Fly.enabled then return end
 		if Fly.active then stop() else start() end
 	end)
 
@@ -2208,7 +2231,7 @@ do
 end
 
 ------------------------------------------------------------
--- LÓGICA: FULLBRIGHT
+-- LÓGICA: FULLBRIGHT (Remove Sombras + Névoas)
 ------------------------------------------------------------
 local Fullbright = {enabled = false, orig = {}}
 do
@@ -2219,17 +2242,47 @@ do
 		Fullbright.enabled = on
 
 		if on then
+			-- Salva originais
 			Fullbright.orig.GlobalShadows = Lighting.GlobalShadows
+			Fullbright.orig.FogEnd = Lighting.FogEnd
+			Fullbright.orig.FogStart = Lighting.FogStart
+
+			-- Aplica Fullbright + Remove Névoas
 			Lighting.GlobalShadows = false
+			Lighting.FogEnd = 100000
+			Lighting.FogStart = 0
+			
+			-- Desativa Atmosphere (névoa volumetrica) se existir
+			for _, obj in ipairs(Lighting:GetChildren()) do
+				if obj:IsA("Atmosphere") then
+					if Fullbright.orig[obj] == nil then Fullbright.orig[obj] = obj.Density end
+					obj.Density = 0
+				end
+			end
 		else
-			Lighting.GlobalShadows = Fullbright.orig.GlobalShadows
+			-- Restaura originais
+			Lighting.GlobalShadows = Fullbright.orig.GlobalShadows or true
+			Lighting.FogEnd = Fullbright.orig.FogEnd or 100000
+			Lighting.FogStart = Fullbright.orig.FogStart or 0
+			
+			for _, obj in ipairs(Lighting:GetChildren()) do
+				if obj:IsA("Atmosphere") then
+					obj.Density = Fullbright.orig[obj] or 0.3
+				end
+			end
 		end
 	end
 
 	function Fullbright.enforce()
 		if not Fullbright.enabled then return end
-		if Lighting.GlobalShadows then
-			Lighting.GlobalShadows = false
+		if Lighting.GlobalShadows then Lighting.GlobalShadows = false end
+		if Lighting.FogEnd ~= 100000 then Lighting.FogEnd = 100000 end
+		if Lighting.FogStart ~= 0 then Lighting.FogStart = 0 end
+		
+		for _, obj in ipairs(Lighting:GetChildren()) do
+			if obj:IsA("Atmosphere") and obj.Density ~= 0 then
+				obj.Density = 0
+			end
 		end
 	end
 
@@ -2556,7 +2609,7 @@ do
 	toggle(c, 30, 40, cardW - 60, 28, function(on)
 		Fullbright.setEnabled(on)
 	end)
-	hint(c, "Remove todas as sombras", 72)
+	hint(c, "Remove sombras e névoas", 72)
 end
 
 -- FLING (PUNCH) --------------------------------------------------
@@ -2617,16 +2670,136 @@ end
 scroll2.CanvasSize = UDim2.fromOffset(0, page2.cursor + 20)
 
 ------------------------------------------------------------
--- PÁGINA 3: (vazia, reservada para o futuro)
+-- PÁGINA 3: CHECKPOINT
 ------------------------------------------------------------
 do
-	local navHost = new("Frame", {
-		Parent = scroll3, Position = UDim2.fromOffset(14, 14), Size = UDim2.fromOffset(cardW, 40),
-		BackgroundTransparency = 1,
-	})
-	navWidget({frame = navHost, accent = C.sub})
-	label(scroll3, "Reservado para novas funções", 10, UDim2.fromOffset(14, 60), UDim2.fromOffset(cardW, 16), C.sub)
-	page3.cursor = 80
+	local c = card(120, Color3.fromRGB(120, 230, 170), "CHECKPOINT", "📌", page3)
+	navWidget(c) -- Adicionado o seletor de páginas no topo!
+	
+	local saved
+	local goKey = Enum.KeyCode.T
+	local binding = false
+
+	local function getRoot()
+		local ch = player.Character
+		return ch and ch:FindFirstChild("HumanoidRootPart")
+	end
+
+	local hintLbl = hint(c, "Rolar do mouse para salvar", 96)
+
+	local function doTeleport()
+		local r = getRoot()
+		if not r or not saved then return end
+		r.CFrame = saved
+		r.AssemblyLinearVelocity = Vector3.zero
+		Noclip.lastGroundY = nil
+		
+		-- Feedback visual
+		hintLbl.Text = "Teleportado com sucesso!"
+		hintLbl.TextColor3 = C.cyan
+		tw(hintLbl, 0.1, {TextColor3 = Color3.new(1,1,1)})
+		
+		task.delay(2, function()
+			if hintLbl.Text == "Teleportado com sucesso!" then
+				hintLbl.Text = string.format("Salvo: %d, %d, %d", math.floor(saved.Position.X + 0.5), math.floor(saved.Position.Y + 0.5), math.floor(saved.Position.Z + 0.5))
+				hintLbl.TextColor3 = C.sub
+			end
+		end)
+	end
+
+	local function createButton(x, text, onClick, accentColor)
+		local b = new("TextButton", {
+			Parent = c.frame, Position = UDim2.fromOffset(x, 40), Size = UDim2.fromOffset(96, 28),
+			BackgroundColor3 = C.bg2, Text = text, TextColor3 = C.text, TextSize = 11,
+			Font = Enum.Font.GothamBold, AutoButtonColor = false,
+		}, {corner(8)})
+		
+		local sc = new("UIScale", {Parent = b})
+		local st = stroke(C.line, 1, 0.3)
+		st.Parent = b
+		
+		b.MouseEnter:Connect(function() 
+			tw(b, 0.15, {BackgroundColor3 = accentColor:Lerp(Color3.new(1,1,1), 0.2)})
+			tw(st, 0.15, {Color = accentColor, Transparency = 0.1})
+			tw(b, 0.15, {TextColor3 = Color3.new(1,1,1)})
+		end)
+		
+		b.MouseLeave:Connect(function() 
+			tw(b, 0.2, {BackgroundColor3 = C.bg2})
+			tw(st, 0.2, {Color = C.line, Transparency = 0.3})
+			tw(b, 0.2, {TextColor3 = C.text})
+		end)
+		
+		b.MouseButton1Click:Connect(function()
+			sc.Scale = 0.9
+			tw(sc, 0.25, {Scale = 1}, Enum.EasingStyle.Back)
+			onClick()
+		end)
+		return b
+	end
+
+	local function saveCheckpoint()
+		local r = getRoot()
+		if not r then return end
+		saved = r.CFrame
+		local p = saved.Position
+		hintLbl.Text = string.format("Salvo: %d, %d, %d", math.floor(p.X + 0.5), math.floor(p.Y + 0.5), math.floor(p.Z + 0.5))
+		hintLbl.TextColor3 = Color3.fromRGB(120, 230, 170)
+		
+		-- Acende a bolinha e faz piscar no painel
+		c.dot.BackgroundColor3 = C.on
+		activeDots[c.dot] = true
+		
+		-- Flash no texto (fica branco e volta)
+		tw(hintLbl, 0.1, {TextColor3 = Color3.new(1,1,1)})
+		task.delay(0.2, function() tw(hintLbl, 0.3, {TextColor3 = Color3.fromRGB(120, 230, 170)}) end)
+	end
+
+	createButton(12, "SALVAR", saveCheckpoint, Color3.fromRGB(120, 230, 170))
+	createButton(114, "IR", doTeleport, C.blue)
+
+	-- Botão de configurar tecla
+	local keyBtn = new("TextButton", {
+		Parent = c.frame, Position = UDim2.fromOffset(114, 74), Size = UDim2.fromOffset(96, 18),
+		BackgroundColor3 = C.bg2, Text = "Tecla: " .. goKey.Name, TextColor3 = C.sub, TextSize = 9,
+		Font = Enum.Font.GothamBold, AutoButtonColor = false,
+	}, {corner(6), stroke(C.line, 1, 0.4)})
+	
+	keyBtn.MouseButton1Click:Connect(function()
+		if binding then return end
+		binding = true
+		keyBtn.Text = "..."
+		local conn
+		conn = UIS.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Keyboard then
+				conn:Disconnect()
+				if input.KeyCode ~= Enum.KeyCode.Escape then
+					goKey = input.KeyCode
+				end
+				keyBtn.Text = "Tecla: " .. goKey.Name
+				binding = false
+			end
+		end)
+	end)
+
+	-- Atalho do Mouse: Botão do Meio (Scroll) para salvar
+	UIS.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton3 then
+			if UIS:GetFocusedTextBox() then return end
+			saveCheckpoint()
+		end
+	end)
+
+	-- Atalho de Teclado para teleportar
+	UIS.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed or binding then return end
+		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == goKey then
+			if UIS:GetFocusedTextBox() then return end
+			doTeleport()
+		end
+	end)
+
 end
 scroll3.CanvasSize = UDim2.fromOffset(0, page3.cursor + 20)
 
@@ -2653,6 +2826,46 @@ scroll.Size = UDim2.fromOffset(W, H - 58)
 scroll2.Size = UDim2.fromOffset(W, H - 58)
 scroll3.Size = UDim2.fromOffset(W, H - 58)
 main.Position = UDim2.fromOffset(40, math.max(10, math.floor((viewH - H * fit) / 2)))
+
+------------------------------------------------------------
+-- PAINEL POR CIMA DO JOGO: enquanto o mouse estiver sobre qualquer parte do painel,
+-- o zoom da câmera do jogo fica travado (roda do mouse não chega mais na câmera).
+-- Ao sair do painel, os limites originais de zoom voltam.
+------------------------------------------------------------
+local ZoomLock = {locked = false, savedMin = nil, savedMax = nil}
+
+local function setZoomLock(on)
+	if on and not ZoomLock.locked then
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+		local ok = pcall(function()
+			ZoomLock.savedMin = player.CameraMinZoomDistance
+			ZoomLock.savedMax = player.CameraMaxZoomDistance
+			local cur = (cam.CFrame.Position - cam.Focus.Position).Magnitude
+			player.CameraMinZoomDistance = cur
+			player.CameraMaxZoomDistance = cur
+		end)
+		ZoomLock.locked = ok
+	elseif not on and ZoomLock.locked then
+		pcall(function()
+			player.CameraMinZoomDistance = ZoomLock.savedMin
+			player.CameraMaxZoomDistance = ZoomLock.savedMax
+		end)
+		ZoomLock.locked = false
+	end
+end
+
+local function mouseOverMain()
+	local m = UIS:GetMouseLocation()
+	local p, sz = main.AbsolutePosition, main.AbsoluteSize
+	return m.X >= p.X and m.X <= p.X + sz.X and m.Y >= p.Y and m.Y <= p.Y + sz.Y
+end
+
+main.MouseEnter:Connect(function() setZoomLock(true) end)
+main.MouseLeave:Connect(function() setZoomLock(mouseOverMain()) end)
+local zoomConn = RS.Heartbeat:Connect(function()
+	setZoomLock(mouseOverMain())
+end)
 
 ------------------------------------------------------------
 -- Animação contínua
@@ -2699,6 +2912,7 @@ local conn = RS.Heartbeat:Connect(function()
 end)
 gui.Destroying:Connect(function()
 	conn:Disconnect()
+	zoomConn:Disconnect()
 	setZoomLock(false)
 	Speed.shutdown()
 	InfJump.shutdown()
@@ -2713,37 +2927,6 @@ gui.Destroying:Connect(function()
 	Fullbright.shutdown()
 	Fling.shutdown()
 end)
-
-------------------------------------------------------------
--- Trava de zoom: enquanto o mouse estiver sobre o painel, o zoom da câmera do jogo
--- fica travado (distância mínima = máxima = distância atual). Ao sair do painel, volta ao normal.
-------------------------------------------------------------
-local ZoomLock = {locked = false, savedMin = nil, savedMax = nil}
-
-local function setZoomLock(on)
-	local lp = player
-	if on and not ZoomLock.locked then
-		local cam = workspace.CurrentCamera
-		if not cam then return end
-		local ok = pcall(function()
-			ZoomLock.savedMin = lp.CameraMinZoomDistance
-			ZoomLock.savedMax = lp.CameraMaxZoomDistance
-			local cur = (cam.CFrame.Position - cam.Focus.Position).Magnitude
-			lp.CameraMinZoomDistance = cur
-			lp.CameraMaxZoomDistance = cur
-		end)
-		ZoomLock.locked = ok
-	elseif not on and ZoomLock.locked then
-		pcall(function()
-			lp.CameraMinZoomDistance = ZoomLock.savedMin
-			lp.CameraMaxZoomDistance = ZoomLock.savedMax
-		end)
-		ZoomLock.locked = false
-	end
-end
-
-main.MouseEnter:Connect(function() setZoomLock(true) end)
-main.MouseLeave:Connect(function() setZoomLock(false) end)
 
 ------------------------------------------------------------
 -- Minimizar / Fechar / Entrada
